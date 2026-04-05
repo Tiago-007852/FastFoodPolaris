@@ -1,0 +1,5 @@
+{
+  "name": "Polaris Fast-Food",
+  "description": "Polaris: Onde o apetite encontra direção. Restaurante de fast-food no Huambo, Angola.",
+  "requestFramePermissions": ["geolocation"]
+}

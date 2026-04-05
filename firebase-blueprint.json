@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "Menu categories for the restaurant.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Category name (e.g., Burgers)." },
+        "order": { "type": "number", "description": "Display order." }
+      },
+      "required": ["name", "order"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "A food item in the menu.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Item name." },
+        "description": { "type": "string", "description": "Item description." },
+        "price": { "type": "number", "description": "Item price." },
+        "image": { "type": "string", "description": "Image URL." },
+        "categoryId": { "type": "string", "description": "Reference to Category ID." },
+        "isPopular": { "type": "boolean", "description": "Whether it's a popular item." },
+        "isPromo": { "type": "boolean", "description": "Whether it's a promotional item." },
+        "extras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "price": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["name", "price", "categoryId"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "General restaurant information.",
+      "type": "object",
+      "properties": {
+        "restaurantName": { "type": "string" },
+        "slogan": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "instagram": { "type": "string" },
+        "openingHours": { "type": "string" },
+        "deliveryFee": { "type": "number" },
+        "heroImage": { "type": "string" },
+        "googleMapsUrl": { "type": "string" }
+      }
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer reviews.",
+      "type": "object",
+      "properties": {
+        "userName": { "type": "string" },
+        "comment": { "type": "string" },
+        "rating": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userName", "comment", "rating"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profiles and roles.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/categories": { "schema": "Category", "description": "Menu categories." },
+    "/menuItems": { "schema": "MenuItem", "description": "Food items." },
+    "/siteSettings": { "schema": "SiteSettings", "description": "Global settings." },
+    "/reviews": { "schema": "Review", "description": "Customer reviews." },
+    "/users": { "schema": "User", "description": "User profiles and roles." }
+  }
+}

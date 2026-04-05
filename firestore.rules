@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: categories
+    // Fields:
+    //   - name: string (required)
+    //   - order: number (required)
+    //
+    // Collection: menuItems
+    // Fields:
+    //   - name: string (required)
+    //   - description: string (required)
+    //   - price: number (required)
+    //   - image: string (required)
+    //   - categoryId: string (required)
+    //   - isPopular: bool (optional)
+    //   - isPromo: bool (optional)
+    //   - extras: list (optional)
+    //
+    // Collection: siteSettings
+    // Fields:
+    //   - restaurantName: string
+    //   - slogan: string
+    //   - address: string
+    //   - phone: string
+    //   - whatsapp: string
+    //   - instagram: string
+    //   - openingHours: string
+    //   - deliveryFee: number
+    //   - heroImage: string
+    //   - googleMapsUrl: string
+    //   - storyTitle: string (for 'about' doc)
+    //   - storySubtitle: string (for 'about' doc)
+    //   - storyText1: string (for 'about' doc)
+    //   - storyText2: string (for 'about' doc)
+    //   - storyImage: string (for 'about' doc)
+    //   - quote: string (for 'about' doc)
+    //   - quoteAuthor: string (for 'about' doc)
+    //
+    // Collection: reviews
+    // Fields:
+    //   - userName: string (required)
+    //   - comment: string (required)
+    //   - rating: number (required, 1-5)
+    //   - date: string (required, ISO date)
+    //
+    // Collection: gallery
+    // Fields:
+    //   - url: string (required)
+    //   - title: string (required)
+    //   - category: string (required)
+    //   - order: number (required)
+    //
+    // Collection: team
+    // Fields:
+    //   - name: string (required)
+    //   - role: string (required)
+    //   - image: string (required)
+    //   - order: number (required)
+    //
+    // Collection: users
+    // Fields:
+    //   - email: string (required)
+    //   - role: string (required, 'admin' or 'user')
+    //   - lastLogin: timestamp
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (
+          (request.auth.token.get('email', '') == "miguellanttonio007@gmail.com" && request.auth.token.get('email_verified', false) == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidRating(rating) {
+      return rating is number && rating >= 1 && rating <= 5;
+    }
+
+    function isValidUser(data) {
+      return data.role in ['admin', 'user', 'visitor', 'admin-pending'] &&
+             (data.email == null || data.email is string) &&
+             (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /siteSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                      hasRequiredFields(['userName', 'comment', 'rating', 'date']) && 
+                      isValidRating(request.resource.data.rating) &&
+                      request.resource.data.comment.size() <= 1000;
+      allow update, delete: if isAdmin();
+    }
+
+    match /gallery/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /team/{memberId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      // Allow users to read their own profile, and admins to read all
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      
+      // Allow users to create their own profile
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) &&
+                      (
+                        (request.resource.data.role == 'visitor' && request.resource.data.isAnonymous == true) ||
+                        (request.resource.data.role == 'user' && request.resource.data.email == request.auth.token.email) ||
+                        isAdmin()
+                      );
+      
+      // Allow users to update their own profile (but not their role unless admin)
+      allow update: if isAuthenticated() && 
+                      (
+                        (isOwner(userId) && isValidUser(request.resource.data) && 
+                         (request.resource.data.role == resource.data.role || isAdmin())) || 
+                        isAdmin()
+                      );
+      
+      allow delete: if isAdmin();
+    }
+  }
+}
