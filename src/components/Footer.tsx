@@ -61,11 +61,11 @@ export const Footer: React.FC = () => {
             <ul className="space-y-4 text-sm">
               <li className="flex items-start space-x-3">
                 <MapPin size={18} className="text-secondary shrink-0" />
-                <span>{settings?.address || 'Rua Principal, 123, Cidade'}</span>
+                <span>{settings?.address || 'Huambo, Rua 50'}</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Phone size={18} className="text-secondary shrink-0" />
-                <span>{settings?.phone || '(11) 99999-9999'}</span>
+                <span>{settings?.phone || '(244) 940250279'}</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Clock size={18} className="text-secondary shrink-0" />

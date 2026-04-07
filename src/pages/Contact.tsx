@@ -105,7 +105,7 @@ export const Contact: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-2xl font-black text-zinc-900">Nossa Localização</h3>
-                  <p className="text-zinc-500">{settings?.address || 'Rua Principal, 123, Cidade, Portugal'}</p>
+                  <p className="text-zinc-500">{settings?.address || 'Huambo, Rua 50'}</p>
                 </div>
               </div>
               <a
