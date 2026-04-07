@@ -10,29 +10,29 @@ export const Contact: React.FC = () => {
     {
       icon: <Phone size={24} />,
       title: 'Telefone',
-      value: settings?.phone || '(11) 99999-9999',
+      value: settings?.phone || '(244) 940250279',
       link: `tel:${settings?.phone?.replace(/\D/g, '')}`,
       color: 'bg-blue-500'
     },
     {
       icon: <MessageCircle size={24} />,
       title: 'WhatsApp',
-      value: settings?.whatsapp || '(11) 99999-9999',
+      value: settings?.whatsapp || '(244) 940250279',
       link: `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '')}`,
       color: 'bg-emerald-500'
     },
     {
       icon: <Instagram size={24} />,
       title: 'Instagram',
-      value: settings?.instagram || '@fastfoodexpress',
+      value: settings?.instagram || '@polarisfastfood',
       link: `https://instagram.com/${settings?.instagram?.replace('@', '')}`,
       color: 'bg-pink-500'
     },
     {
       icon: <Mail size={24} />,
       title: 'Email',
-      value: settings?.email || 'contacto@polaris.com',
-      link: `mailto:${settings?.email || 'contacto@polaris.com'}`,
+      value: settings?.email || 'polaris.fastfood@gmail.com',
+      link: `mailto:${settings?.email || 'polaris.fastfood@gmail.com'}`,
       color: 'bg-zinc-800'
     }
   ];
@@ -78,15 +78,15 @@ export const Contact: React.FC = () => {
             <div className="space-y-4">
               <div className="flex justify-between items-center border-b border-white/10 pb-4">
                 <span className="text-zinc-400">Segunda - Quinta</span>
-                <span className="font-bold">11:00 - 23:00</span>
+                <span className="font-bold">08:00 - 21:00</span>
               </div>
               <div className="flex justify-between items-center border-b border-white/10 pb-4">
                 <span className="text-zinc-400">Sexta - Sábado</span>
-                <span className="font-bold">11:00 - 01:00</span>
+                <span className="font-bold">08:00 - 21:00</span>
               </div>
               <div className="flex justify-between items-center pb-2">
                 <span className="text-zinc-400">Domingo</span>
-                <span className="font-bold">12:00 - 23:00</span>
+                <span className="font-bold">12:00 - 22:00</span>
               </div>
             </div>
             <p className="text-xs text-zinc-500 italic">

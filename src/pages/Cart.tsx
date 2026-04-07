@@ -40,7 +40,7 @@ export const Cart: React.FC = () => {
       `*Total:* Kz${finalTotal.toFixed(2)}\n\n` +
       `_Por favor, confirme o meu pedido!_`;
 
-    const whatsappUrl = `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '') || '351999999999'}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '') || '244940250279'}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
     clearCart();
   };
