@@ -18,7 +18,10 @@ export const Contact: React.FC = () => {
       icon: <MessageCircle size={24} />,
       title: 'WhatsApp',
       value: settings?.whatsapp || '(244) 940250279',
-      link: `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '')}`,
+      link: `https://wa.me/${
+        (settings?.whatsapp?.replace(/\D/g, '') || '244940250279')
+          .replace(/^0/, '244')
+      }`,
       color: 'bg-emerald-500'
     },
     {

@@ -1,3 +1,4 @@
+//sitecontent.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onSnapshot, collection, query, orderBy, doc } from 'firebase/firestore';
 import { db } from './firebase';
