@@ -64,6 +64,7 @@ export const CountdownSectionImpl: React.FC = () => {
   const [countPulse, setCountPulse] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const bgRef = useRef<HTMLDivElement>(null);
   const confettiFiredRef = useRef(false);
   const prevStyleRef = useRef<number | null>(null);
 
@@ -121,6 +122,28 @@ export const CountdownSectionImpl: React.FC = () => {
     v.addEventListener('canplay', tryPlay);
     return () => v.removeEventListener('canplay', tryPlay);
   }, [showVideo, videoSrc]);
+
+  // ---- Video: pause while the section is off-screen (saves CPU/battery) ----
+  useEffect(() => {
+    if (!showVideo) return;
+    const el = bgRef.current;
+    const v = videoRef.current;
+    if (!el || !v || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      entries => {
+        const visible = entries[0]?.isIntersecting;
+        if (visible) {
+          const p = v.play();
+          if (p && typeof p.catch === 'function') p.catch(() => { /* noop */ });
+        } else {
+          v.pause();
+        }
+      },
+      { threshold: 0.05 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [showVideo]);
 
   // ---- Video cleanup: pause + unload on unmount ----
   useEffect(() => {
@@ -233,28 +256,34 @@ export const CountdownSectionImpl: React.FC = () => {
       <style>{IMPL_CSS}</style>
 
       {/* ---- Cinematic video background (z-0, behind everything) ---- */}
-      <div className="absolute inset-0 z-0 overflow-hidden bg-zinc-950">
+      <div ref={bgRef} className="absolute inset-0 z-0 overflow-hidden bg-zinc-950" aria-hidden="true">
         {/* Base layer: always a real food image, so the section never looks empty
-            while the video buffers or if autoplay/decode fails. */}
+            while the video buffers or if autoplay/decode fails. Both layers use the
+            same object-fit so they stay perfectly aligned. */}
         <img
           src={FALLBACK_IMAGE}
           alt=""
           loading="eager"
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: 'translateZ(0)' }}
         />
         {showVideo && (
           <video
             ref={videoRef}
             src={videoSrc}
+            poster={FALLBACK_IMAGE}
             autoPlay
             muted
             loop
             playsInline
-            preload="auto"
+            /* Mobile gets a lighter preload: 60fps @720p is heavy to fetch up front. */
+            preload={isMobile ? 'metadata' : 'auto'}
             onError={() => setVideoFailed(true)}
             className="absolute inset-0 w-full h-full"
-            style={{ objectFit: 'cover' }}
+            /* translateZ promotes the video to its own GPU layer so the page
+               keeps scrolling smoothly while the video decodes. */
+            style={{ objectFit: 'cover', transform: 'translateZ(0)' }}
           />
         )}
         {/* Spec overlay gradient: rgba(0,0,0,.72) top → rgba(0,0,0,.55) bottom */}
