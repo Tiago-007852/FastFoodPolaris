@@ -40,7 +40,7 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
       <p className="text-center text-xs font-bold uppercase tracking-widest text-white/40">
         O que está a chegar
       </p>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         {teasers.map((dish, idx) => (
           <motion.button
             key={dish.id}
@@ -49,33 +49,41 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
             initial={reduced ? { opacity: 1 } : { opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-40px' }}
-            transition={{ duration: 0.55, delay: reduced ? 0 : idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
-            className="teaser-card group relative h-56 rounded-3xl bg-gradient-to-br from-zinc-800/90 to-zinc-900/90 border overflow-hidden text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/60 transition-transform duration-300 hover:-translate-y-1"
+            transition={{ duration: 0.55, delay: reduced ? 0 : idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+            className="teaser-card group relative h-56 sm:h-60 rounded-3xl bg-zinc-900 border overflow-hidden text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/60 transition-transform duration-300 hover:-translate-y-1"
           >
+            {/* Real food photography — blurred as a teaser, sharpens on hover */}
+            {dish.image ? (
+              <img
+                src={dish.image}
+                alt={dish.name}
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 w-full h-full object-cover blur-lg scale-110 group-hover:blur-0 group-hover:scale-100 transition-all duration-700"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+                <span className="text-5xl">{dish.emoji}</span>
+              </div>
+            )}
+
+            {/* Legibility scrim + name */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
             <div className="absolute top-4 right-4 z-10">
               <BadgeChip label="Em Breve" />
             </div>
+
+            <div className="absolute inset-x-0 bottom-0 z-[1] p-4">
+              <p className="text-white font-bold leading-tight drop-shadow">{dish.name}</p>
+              <p className="text-white/65 text-[11px] mt-0.5 line-clamp-1">{dish.description}</p>
+            </div>
+
             {/* Hover preview label */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pb-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 pointer-events-none">
-              <span className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur text-white text-[11px] font-bold flex items-center gap-1.5">
+            <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pb-3.5 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 pointer-events-none">
+              <span className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur text-white text-[11px] font-bold flex items-center gap-1.5">
                 <Eye size={13} />
                 Clica para ver uma prévia
               </span>
-            </div>
-            {/* Blurred content — lightens on hover to spark curiosity */}
-            <div className="h-full flex flex-col items-center justify-center gap-3 px-4 blur-md group-hover:blur-sm group-hover:scale-105 transition-all duration-500 select-none">
-              <span className="text-5xl">{dish.emoji}</span>
-              {dish.image ? (
-                <img
-                  src={dish.image}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="absolute inset-0 w-full h-full object-cover blur-lg scale-110 opacity-60 group-hover:blur-md transition-all duration-500"
-                />
-              ) : null}
-              <p className="text-white font-bold text-center leading-tight relative z-[1]">{dish.name}</p>
-              <p className="text-white/50 text-xs text-center relative z-[1]">{dish.description}</p>
             </div>
           </motion.button>
         ))}
@@ -85,15 +93,16 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
       <Modal open={!!preview} onClose={() => setPreview(null)} maxWidth="max-w-md">
         {preview && (
           <div className="p-8 sm:p-10 space-y-5 text-center">
-            <div className="relative h-44 rounded-3xl overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-              {preview.image && (
+            <div className="relative h-52 rounded-3xl overflow-hidden bg-zinc-900 flex items-center justify-center">
+              {preview.image ? (
                 <img
                   src={preview.image}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover blur-[3px] scale-110 opacity-80"
+                  alt={preview.name}
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
+              ) : (
+                <span className="text-6xl">{preview.emoji}</span>
               )}
-              <span className="relative z-[1] text-6xl">{preview.emoji}</span>
               <div className="absolute top-4 right-4 z-[2]">
                 <BadgeChip label="Em Breve" />
               </div>

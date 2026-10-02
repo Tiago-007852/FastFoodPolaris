@@ -6,13 +6,22 @@ export const DEFAULT_TARGET = '2026-10-05T00:00:00+01:00';
 /** localStorage key for the WhatsApp notification submission (unchanged flow). */
 export const STORAGE_KEY = 'polaris_notify_submitted';
 
-/** Fallback teaser dishes when there are not enough "Novidade" dishes in the menu. */
-export const DEFAULT_TEASERS: { name: string; emoji: string; hint: string }[] = [
-  { name: 'Combo Universitário', emoji: '🍔', hint: 'Burger + batatas + bebida' },
-  { name: 'Polaris Chicken Crunch', emoji: '🍗', hint: 'Frango crocante especial' },
-  { name: 'Milkshake Polaris Gold', emoji: '🥤', hint: 'Edição limitada' },
-  { name: 'Pizza Huambo Style', emoji: '🍕', hint: 'Massa artesanal' },
+/**
+ * Fallback teaser dishes when there are not enough "Novidade" dishes in the
+ * menu. Real food photography (local, so it always loads) instead of emoji.
+ * Pizza and milkshake were intentionally dropped.
+ */
+export const DEFAULT_TEASERS: { name: string; emoji: string; hint: string; image: string }[] = [
+  { name: 'Burger Simples', emoji: '🍔', hint: 'Pão, carne, queijo e molho da casa', image: '/images/teasers/burger-simples.jpg' },
+  { name: 'Burger Duplo', emoji: '🍔', hint: 'Duas carnes, queijo derretido e bacon', image: '/images/teasers/burger-duplo.jpg' },
+  { name: 'Cachorro-quente', emoji: '🌭', hint: 'Salsicha grelhada com molho e batata', image: '/images/teasers/hot-dog.jpg' },
+  { name: 'Sanduíche de Frango', emoji: '🥪', hint: 'Frango grelhado, queijo e salada', image: '/images/teasers/sanduiche-frango.jpg' },
+  { name: 'Sanduíche de Carne', emoji: '🥩', hint: 'Carne fatiada com queijo derretido', image: '/images/teasers/sanduiche-carne.jpg' },
+  { name: 'Batata Frita com Queijo', emoji: '🍟', hint: 'Batatas crocantes cobertas de queijo', image: '/images/teasers/batata-queijo.jpg' },
 ];
+
+/** How many teaser cards the section shows. */
+export const TEASER_COUNT = DEFAULT_TEASERS.length;
 
 /** Brand red used by the site theme (site primary #dc2626, per @theme tokens). */
 export const BRAND_RED = '#dc2626';
@@ -74,22 +83,28 @@ export interface TeaserItem {
 
 /** Builds the teaser list: real "Novidade" menu dishes first, fallback teasers fill the rest. */
 export const buildTeasers = (menuItems: MenuItem[]): TeaserItem[] => {
-  const newDishes = menuItems.filter(i => i.isNew).slice(0, 4);
-  const fallbackFor = (idx: number): TeaserItem => ({
-    id: `teaser-${idx}`,
-    name: DEFAULT_TEASERS[idx % DEFAULT_TEASERS.length].name,
-    description: DEFAULT_TEASERS[idx % DEFAULT_TEASERS.length].hint,
-    image: '',
-    emoji: DEFAULT_TEASERS[idx % DEFAULT_TEASERS.length].emoji,
-  });
-  if (newDishes.length === 0) return [0, 1, 2, 3].map(fallbackFor);
-  const teasers: TeaserItem[] = newDishes.map((d, i) => ({
-    id: d.id,
-    name: d.name,
-    description: d.description,
-    image: d.image,
-    emoji: DEFAULT_TEASERS[i % DEFAULT_TEASERS.length].emoji,
-  }));
-  for (let i = teasers.length; i < 4; i++) teasers.push(fallbackFor(i));
-  return teasers.slice(0, 4);
+  const fallbackFor = (idx: number): TeaserItem => {
+    const t = DEFAULT_TEASERS[idx % DEFAULT_TEASERS.length];
+    return {
+      id: `teaser-${idx}`,
+      name: t.name,
+      description: t.hint,
+      image: t.image,
+      emoji: t.emoji,
+    };
+  };
+
+  const teasers: TeaserItem[] = menuItems
+    .filter(i => i.isNew)
+    .slice(0, TEASER_COUNT)
+    .map((d, i) => ({
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      image: d.image,
+      emoji: DEFAULT_TEASERS[i % DEFAULT_TEASERS.length].emoji,
+    }));
+
+  for (let i = teasers.length; i < TEASER_COUNT; i++) teasers.push(fallbackFor(i));
+  return teasers.slice(0, TEASER_COUNT);
 };
