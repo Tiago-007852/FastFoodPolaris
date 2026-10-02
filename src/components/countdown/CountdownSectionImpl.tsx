@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BellRing, ChevronRight, ShoppingBag } from 'lucide-react';
+import { BellRing, ChevronRight, Play, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { useSite } from '../../SiteContext';
@@ -18,7 +18,6 @@ import { TeaserSection } from './TeaserSection';
 import { NotificationModal } from './NotificationModal';
 
 const DEFAULT_VIDEO = '/videos/countdown-bg.mp4';
-const FALLBACK_IMAGE = '/images/countdown-bg-fallback.jpg';
 
 const IMPL_CSS = `
 .countdown-overlay {
@@ -31,8 +30,8 @@ const IMPL_CSS = `
 }
 .counter-pulse { animation: counter-pulse 0.45s ease-out; }
 
-/* Mobile: keep the 16:9 video in a viewport-height band and dissolve it into
-   the still image below, instead of zooming a landscape clip into a tall
+/* Mobile: keep the 16:9 video in a viewport-height band and fade it out into
+   the brand gradient below, instead of zooming a landscape clip into a tall
    narrow box. From md up the section is wide enough for a full-bleed cover. */
 .countdown-video {
   height: 70vh;
@@ -77,6 +76,7 @@ export const CountdownSectionImpl: React.FC = () => {
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
   const [subscriberCount, setSubscriberCount] = useState(0);
   const [countPulse, setCountPulse] = useState(false);
 
@@ -126,18 +126,37 @@ export const CountdownSectionImpl: React.FC = () => {
   const videoSrc: string = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
   const showVideo = !reducedMotion && !videoFailed;
 
-  // ---- Video: force playback (some browsers need an explicit play call) ----
+  // ---- Video: force playback robustly (React needs muted set as a property) ----
   useEffect(() => {
     if (!showVideo) return;
     const v = videoRef.current;
     if (!v) return;
+
+    // Muted must be set as a DOM property for the autoplay policy to accept it
+    v.muted = true;
+    v.defaultMuted = true;
+
+    let attempts = 0;
     const tryPlay = () => {
+      if (attempts > 4) return;
+      attempts += 1;
+      v.muted = true;
       const p = v.play();
-      if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked — poster stays */ });
+      if (p && typeof p.catch === 'function') {
+        p.then(() => setVideoPlaying(true)).catch(() => { /* still blocked — show the play button */ });
+      } else {
+        setVideoPlaying(true);
+      }
     };
+
+    setVideoPlaying(false);
     tryPlay();
-    v.addEventListener('canplay', tryPlay);
-    return () => v.removeEventListener('canplay', tryPlay);
+    ['loadeddata', 'canplay', 'playing'].forEach(evt => v.addEventListener(evt, tryPlay));
+    document.addEventListener('visibilitychange', tryPlay);
+    return () => {
+      ['loadeddata', 'canplay', 'playing'].forEach(evt => v.removeEventListener(evt, tryPlay));
+      document.removeEventListener('visibilitychange', tryPlay);
+    };
   }, [showVideo, videoSrc]);
 
   // ---- Video: pause while the section is off-screen (saves CPU/battery) ----
@@ -273,27 +292,24 @@ export const CountdownSectionImpl: React.FC = () => {
       <style>{IMPL_CSS}</style>
 
       {/* ---- Cinematic video background (z-0, behind everything) ---- */}
-      <div ref={bgRef} className="absolute inset-0 z-0 overflow-hidden bg-zinc-950" aria-hidden="true">
-        {/* Base layer: fills the WHOLE section at all sizes, so there is always a
-            real food image even while the video buffers or autoplay is blocked. */}
-        <img
-          src={FALLBACK_IMAGE}
-          alt=""
-          loading="eager"
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: 'translateZ(0)' }}
+      <div ref={bgRef} className="absolute inset-0 z-0 overflow-hidden bg-zinc-950">
+        {/* On-brand base layer. The video sits on top of this, so there is never a
+            bare grey block while it buffers. */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(120% 90% at 50% 0%, #7f1d1d 0%, #450a0a 45%, #09090b 100%)',
+          }}
         />
         {showVideo && (
           /* The source is 16:9. On tall, narrow phones a full-height cover crop
              would zoom in ~4x and look blurry, so the video is confined to a
-             viewport-height cinematic band on mobile and masked into the still
-             image below. From md up the section is wide enough for a full-bleed
-             cover, so the video fills it entirely. */
+             viewport-height cinematic band on mobile and masked out below.
+             From md up the section is wide enough for a full-bleed cover. */
           <video
             ref={videoRef}
             src={videoSrc}
-            poster={FALLBACK_IMAGE}
             autoPlay
             muted
             loop
@@ -301,6 +317,8 @@ export const CountdownSectionImpl: React.FC = () => {
             /* Mobile gets a lighter preload: 60fps @720p is heavy to fetch up front. */
             preload={isMobile ? 'metadata' : 'auto'}
             onError={() => setVideoFailed(true)}
+            onPause={() => setVideoPlaying(false)}
+            onPlay={() => setVideoPlaying(true)}
             className="countdown-video absolute inset-x-0 top-0 w-full"
             style={{
               objectFit: 'cover',
@@ -308,6 +326,27 @@ export const CountdownSectionImpl: React.FC = () => {
             }}
           />
         )}
+
+        {/* If the browser refused autoplay, offer a manual play button so the
+            video is always reachable instead of silently showing a still frame. */}
+        {showVideo && !videoPlaying && (
+          <button
+            type="button"
+            onClick={() => {
+              const v = videoRef.current;
+              if (!v) return;
+              v.muted = true;
+              const p = v.play();
+              if (p && typeof p.catch === 'function') p.catch(() => setVideoPlaying(false));
+            }}
+            className="absolute bottom-6 right-6 z-20 flex items-center gap-2 px-4 py-2.5 rounded-full bg-black/60 backdrop-blur border border-white/20 text-white text-xs font-bold hover:bg-black/80 transition-colors"
+            aria-label="Reproduzir vídeo de fundo"
+          >
+            <Play size={14} fill="currentColor" />
+            Reproduzir vídeo
+          </button>
+        )}
+
         {/* Spec overlay gradient: rgba(0,0,0,.72) top → rgba(0,0,0,.55) bottom */}
         <div className="countdown-overlay absolute inset-0" />
         {/* Brand colour accents */}
