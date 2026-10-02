@@ -40,20 +40,20 @@ export const MorphingNumbersStyle: React.FC<CountdownStyleProps> = ({ countdown,
   return (
     <div>
       <style>{MORPH_CSS}</style>
-      <div className="flex justify-center items-stretch gap-2 sm:gap-5">
+      <div className="flex justify-center items-stretch gap-1 sm:gap-5 w-full px-1">
         {UNITS.map((u, idx) => (
           <React.Fragment key={u.key}>
             {idx > 0 && (
               <span
                 className="morph-sep font-black self-center text-white"
-                style={{ fontSize: 'clamp(28px, 6vw, 60px)' }}
+                style={{ fontSize: 'clamp(14px, 3.5vw, 60px)' }}
                 aria-hidden="true"
               >
                 :
               </span>
             )}
-            <div className="morph-glass rounded-[28px] px-2 sm:px-6 py-4 sm:py-6 text-center min-w-[64px] sm:min-w-[110px]">
-              <div className="leading-none" style={{ fontSize: 'clamp(48px, 10vw, 96px)' }}>
+            <div className="morph-glass rounded-2xl sm:rounded-[28px] px-1 sm:px-6 py-4 sm:py-6 text-center min-w-0 flex-1 sm:flex-none sm:min-w-[110px] max-w-[150px]">
+              <div className="leading-none" style={{ fontSize: 'clamp(28px, 8.5vw, 96px)' }}>
                 <AnimatePresence mode="popLayout" initial={false}>
                   <motion.span
                     key={countdown[u.key]}
@@ -67,7 +67,7 @@ export const MorphingNumbersStyle: React.FC<CountdownStyleProps> = ({ countdown,
                   </motion.span>
                 </AnimatePresence>
               </div>
-              <p className="text-[9px] sm:text-xs font-light uppercase tracking-[0.2em] text-white mt-2">
+              <p className="text-[8px] sm:text-xs font-light uppercase tracking-[0.2em] text-white mt-2 truncate">
                 {u.label}
               </p>
             </div>

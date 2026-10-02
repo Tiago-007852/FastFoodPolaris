@@ -49,13 +49,13 @@ export const LiquidFillStyle: React.FC<CountdownStyleProps> = ({ countdown, redu
   return (
     <div>
       <style>{LIQUID_CSS}</style>
-      <div className="flex justify-center items-stretch gap-2 sm:gap-5">
+      <div className="flex justify-center items-stretch gap-1 sm:gap-5 w-full px-1">
         {UNITS.map((u, idx) => {
           const pct = heights[u.key];
           return (
             <React.Fragment key={u.key}>
-              {idx > 0 && <span className="font-black self-center text-white/50" style={{ fontSize: 'clamp(28px, 6vw, 60px)' }} aria-hidden="true">:</span>}
-              <div className="liquid-unit rounded-[28px] px-2 sm:px-6 py-3 sm:py-5 text-center min-w-[64px] sm:min-w-[110px] overflow-hidden relative">
+              {idx > 0 && <span className="font-black self-center text-white/50" style={{ fontSize: 'clamp(14px, 3.5vw, 60px)' }} aria-hidden="true">:</span>}
+              <div className="liquid-unit rounded-2xl sm:rounded-[28px] px-1 sm:px-6 py-3 sm:py-5 text-center min-w-0 flex-1 sm:flex-none sm:min-w-[110px] max-w-[150px] overflow-hidden relative">
                 {/* Liquid column — height transitions smoothly (0.9s ease) */}
                 <div
                   className="absolute inset-x-0 bottom-0"
@@ -79,13 +79,13 @@ export const LiquidFillStyle: React.FC<CountdownStyleProps> = ({ countdown, redu
                 <div
                   className="relative z-10 font-black tabular-nums text-white"
                   style={{
-                    fontSize: 'clamp(48px, 10vw, 96px)',
+                    fontSize: 'clamp(28px, 8.5vw, 96px)',
                     textShadow: '0 2px 12px rgba(0,0,0,.55)',
                   }}
                 >
                   {formatDigit(countdown[u.key === 'hour' ? 'hours' : u.key === 'minute' ? 'minutes' : u.key === 'second' ? 'seconds' : 'days'])}
                 </div>
-                <p className="relative z-10 text-[9px] sm:text-xs font-bold uppercase tracking-widest text-white mt-2">{u.label}</p>
+                <p className="relative z-10 text-[8px] sm:text-xs font-bold uppercase tracking-widest text-white mt-2 truncate">{u.label}</p>
               </div>
             </React.Fragment>
           );

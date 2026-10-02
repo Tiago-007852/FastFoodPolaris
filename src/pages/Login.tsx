@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2, Chrome } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  loginWithEmail, 
-  registerWithEmail, 
-  updateUserName, 
-  loginWithGoogle 
-} from '../firebase';
+import { ApiError, authApi } from '../lib/api';
 import { useAuth } from '../AuthContext';
 
 export const Login: React.FC = () => {
@@ -22,11 +17,11 @@ export const Login: React.FC = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
 
-  // Redirect if already logged in (and not anonymous)
+  // Redirect as soon as a session exists
   React.useEffect(() => {
-    if (user && !user.isAnonymous) {
+    if (user) {
       const from = (location.state as any)?.from?.pathname || '/';
       navigate(from, { replace: true });
     }
@@ -40,40 +35,38 @@ export const Login: React.FC = () => {
 
     try {
       if (isLogin) {
-        await loginWithEmail(email, password);
+        await authApi.signIn(email, password);
         setSuccess('Login realizado com sucesso!');
       } else {
         if (!name) throw new Error('Por favor, insira o seu nome.');
-        const userCredential = await registerWithEmail(email, password);
-        await updateUserName(userCredential.user, name);
+        await authApi.signUp(name, email, password);
         setSuccess('Conta criada com sucesso!');
       }
-    } catch (err: any) {
+      await refresh();
+    } catch (err) {
+      const apiErr = err as ApiError;
       // Don't log expected auth errors as "errors" to avoid cluttering the console
-      if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/email-already-in-use', 'auth/weak-password', 'auth/invalid-email'].includes(err.code)) {
-        console.warn('Auth feedback:', err.code);
+      if (apiErr.status >= 400 && apiErr.status < 500) {
+        console.warn('Auth feedback:', apiErr.code || apiErr.message);
       } else {
         console.error('Auth error:', err);
       }
 
-      let message = 'Ocorreu um erro ao processar o seu pedido.';
-      
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      const code = apiErr.code || '';
+      let message = apiErr.message || 'Ocorreu um erro ao processar o seu pedido.';
+
+      if (code === 'INVALID_EMAIL_OR_PASSWORD' || code === 'USER_NOT_FOUND') {
         message = 'Email ou palavra-passe incorretos.';
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (code === 'USER_ALREADY_EXISTS' || code === 'EMAIL_ALREADY_EXISTS') {
         message = 'Este email já está em uso. Se já tem uma conta, tente iniciar sessão.';
-      } else if (err.code === 'auth/weak-password') {
-        message = 'A palavra-passe deve ter pelo menos 6 caracteres.';
-      } else if (err.code === 'auth/invalid-email') {
+      } else if (code === 'PASSWORD_TOO_SHORT') {
+        message = 'A palavra-passe deve ter pelo menos 8 caracteres.';
+      } else if (code === 'INVALID_EMAIL') {
         message = 'O formato do email não é válido.';
-      } else if (err.code === 'auth/operation-not-allowed') {
-        message = 'O login com email e palavra-passe não está ativado no Firebase Console.';
-      } else if (err.code === 'auth/user-disabled') {
-        message = 'Esta conta foi desativada.';
-      } else if (err.code === 'auth/too-many-requests') {
+      } else if (apiErr.status === 429) {
         message = 'Demasiadas tentativas. Por favor, tente mais tarde ou recupere a sua palavra-passe.';
       }
-      
+
       setError(message);
     } finally {
       setLoading(false);
@@ -89,38 +82,12 @@ export const Login: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const { resetPassword } = await import('../firebase');
-      await resetPassword(email);
+      await authApi.requestPasswordReset(email);
       setResetEmailSent(true);
       setSuccess('Email de recuperação enviado! Verifique a sua caixa de entrada.');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Reset password error:', err);
       setError('Não foi possível enviar o email de recuperação. Verifique se o email está correto.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      await loginWithGoogle();
-      setSuccess('Login com Google realizado com sucesso!');
-    } catch (err: any) {
-      console.error('Google Auth error:', err);
-      
-      let message = 'Erro ao entrar com o Google.';
-      
-      if (err.code === 'auth/popup-blocked') {
-        message = 'O popup foi bloqueado pelo seu navegador. Por favor, permita popups para este site.';
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        message = 'O login foi cancelado.';
-      } else if (err.message?.includes('403') || err.code === 'auth/internal-error') {
-        message = 'Erro 403: O domínio desta aplicação ainda não está totalmente autorizado no Google Cloud Console. Por favor, tente novamente em alguns minutos ou use o login por email.';
-      }
-      
-      setError(message);
     } finally {
       setLoading(false);
     }
@@ -238,24 +205,6 @@ export const Login: React.FC = () => {
               {!loading && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
-
-          <div className="relative py-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-black/5"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase tracking-widest font-bold">
-              <span className="bg-white px-4 text-zinc-400">Ou continue com</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full py-4 bg-white border border-black/5 rounded-2xl font-bold text-zinc-900 hover:bg-zinc-50 transition-all flex items-center justify-center space-x-3 shadow-sm disabled:opacity-50"
-          >
-            <Chrome size={20} className="text-primary" />
-            <span>Google</span>
-          </button>
 
           <div className="text-center pt-4">
             <button

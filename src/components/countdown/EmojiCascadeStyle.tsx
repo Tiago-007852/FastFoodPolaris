@@ -128,24 +128,24 @@ export const EmojiCascadeStyle: React.FC<CountdownStyleProps> = ({ countdown, is
         )}
 
         {/* Numbers */}
-        <div className="relative z-10 flex justify-center items-stretch gap-2 sm:gap-5">
+        <div className="relative z-10 flex justify-center items-stretch gap-1 sm:gap-5 w-full px-1">
           {UNITS.map((u, idx) => (
             <React.Fragment key={u.key}>
               {idx > 0 && (
-                <span className="font-black self-center text-white/50" style={{ fontSize: 'clamp(28px, 6vw, 60px)' }} aria-hidden="true">
+                <span className="font-black self-center text-white/50" style={{ fontSize: 'clamp(14px, 3.5vw, 60px)' }} aria-hidden="true">
                   :
                 </span>
               )}
-              <div className="rounded-[28px] px-2 sm:px-6 py-4 sm:py-6 text-center min-w-[64px] sm:min-w-[110px] bg-black/45 backdrop-blur-xl border border-white/10">
+              <div className="rounded-2xl sm:rounded-[28px] px-1 sm:px-6 py-4 sm:py-6 text-center min-w-0 flex-1 sm:flex-none sm:min-w-[110px] max-w-[150px] bg-black/45 backdrop-blur-xl border border-white/10">
                 {/* key remount replays the bounce animation on every second tick */}
                 <span
                   key={countdown[u.key]}
                   className={`inline-block font-black tabular-nums text-white ${reduced ? '' : 'emoji-num-bounce'}`}
-                  style={{ fontSize: 'clamp(48px, 10vw, 96px)', textShadow: '0 2px 14px rgba(0,0,0,.6)' }}
+                  style={{ fontSize: 'clamp(28px, 8.5vw, 96px)', textShadow: '0 2px 14px rgba(0,0,0,.6)' }}
                 >
                   {formatDigit(countdown[u.key])}
                 </span>
-                <p className="emoji-label text-[9px] sm:text-xs font-bold uppercase tracking-widest text-white mt-2">
+                <p className="emoji-label text-[8px] sm:text-xs font-bold uppercase tracking-widest text-white mt-2 truncate">
                   {u.label}
                 </p>
               </div>

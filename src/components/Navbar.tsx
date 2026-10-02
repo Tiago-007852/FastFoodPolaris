@@ -4,15 +4,23 @@ import { ShoppingCart, Menu, X, User, LogOut } from 'lucide-react';
 import { useCart } from '../CartContext';
 import { useAuth } from '../AuthContext';
 import { useSite } from '../SiteContext';
-import { loginWithGoogle, logout } from '../firebase';
+import { authApi } from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { itemCount, total } = useCart();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, refresh } = useAuth();
   const { settings } = useSite();
   const location = useLocation();
+
+  const handleLogout = async () => {
+    try {
+      await authApi.signOut();
+    } finally {
+      await refresh();
+    }
+  };
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -70,16 +78,16 @@ export const Navbar: React.FC = () => {
             </Link>
 
             {/* Auth */}
-            {user && !user.isAnonymous ? (
+            {user ? (
               <div className="flex items-center space-x-3">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full border border-black/5" />
+                {user.image ? (
+                  <img src={user.image} alt="" className="w-8 h-8 rounded-full border border-black/5" />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 border border-black/5">
                     <User size={16} />
                   </div>
                 )}
-                <button onClick={logout} className="p-2 text-zinc-600 hover:text-red-500 transition-colors">
+                <button onClick={handleLogout} className="p-2 text-zinc-600 hover:text-red-500 transition-colors">
                   <LogOut size={20} />
                 </button>
               </div>
@@ -126,10 +134,10 @@ export const Navbar: React.FC = () => {
                   {link.name}
                 </Link>
               ))}
-              {user && !user.isAnonymous ? (
+              {user ? (
                 <button
                   onClick={() => {
-                    logout();
+                    handleLogout();
                     setIsOpen(false);
                   }}
                   className="w-full mt-4 flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 font-medium"

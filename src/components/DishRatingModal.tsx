@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { apiPost } from '../lib/api';
 import { MenuItem } from '../types';
 import { Modal } from './Modal';
 import { useAuth } from '../AuthContext';
 import { useToast } from './ToastProvider';
-import { handleFirestoreError, OperationType } from '../firestoreUtils';
 
 interface DishRatingModalProps {
   item: MenuItem | null;
@@ -16,7 +14,7 @@ interface DishRatingModalProps {
 /**
  * Feature 4 — "Avaliar Prato" modal.
  * 1–5 star rating + optional comment, saved to the `dishRatings` collection.
- * The card average updates live via the Firestore subscription.
+ * The card average updates live via the API subscription.
  */
 export const DishRatingModal: React.FC<DishRatingModalProps> = ({ item, onClose }) => {
   const { user } = useAuth();
@@ -32,7 +30,7 @@ export const DishRatingModal: React.FC<DishRatingModalProps> = ({ item, onClose 
     if (item) {
       setRating(5);
       setComment('');
-      setUserName(user?.displayName || '');
+      setUserName(user?.name || '');
       setError('');
     }
   }, [item, user]);
@@ -52,18 +50,16 @@ export const DishRatingModal: React.FC<DishRatingModalProps> = ({ item, onClose 
     setSubmitting(true);
     setError('');
     try {
-      await addDoc(collection(db, 'dishRatings'), {
+      await apiPost('/dishRatings', {
         dishId: item.id,
         userName: userName.trim(),
         rating,
         comment: comment.trim(),
-        date: serverTimestamp(),
-        isHidden: false,
       });
       showToast('Avaliação enviada! Obrigado ⭐', 'success');
       onClose();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'dishRatings');
+      console.error('Error submitting dish rating', err);
       setError('Erro ao enviar a avaliação. Tente novamente.');
     } finally {
       setSubmitting(false);

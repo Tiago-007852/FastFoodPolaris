@@ -1,27 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone, MonitorPlay, MapPin, Power, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone, MonitorPlay, MapPin, Power, Eye, EyeOff, RotateCcw, Sparkles } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useSite } from '../SiteContext';
 import { useZones, DEFAULT_ZONES, formatEta } from '../ZonesContext';
-import { loginWithGoogle, db } from '../firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../firestoreUtils';
-import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating } from '../types';
-import { seedDatabase } from '../seed';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/api';
+import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating, Teaser } from '../types';
 import { ImageUpload } from '../components/ImageUpload';
 
+/** Admin panel data helpers — every write goes to the Postgres API now. */
+const logError = (err: unknown, path: string) => console.error(`API error on ${path}`, err);
+
+/** Admin panel uses Firestore collection names; the API resource names differ for zones. */
+const resourceOf = (collection: string) => (collection === 'deliveryZones' ? 'zones' : collection);
+
 export const Admin: React.FC = () => {
-  const { user, isAdmin, loading: authLoading } = useAuth();
-  const { categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, loading: siteLoading } = useSite();
+  const { user, isAdmin, loading: authLoading, refresh: refreshAuth } = useAuth();
+  const { categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, teasers, loading: siteLoading } = useSite();
   const { zones } = useZones();
-  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'teasers' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
   const [users, setUsers] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [tempImage, setTempImage] = useState<string>('');
   const [tempImage2, setTempImage2] = useState<string>('');
   const [extras, setExtras] = useState<{ name: string; price: number }[]>([]);
@@ -31,10 +34,9 @@ export const Admin: React.FC = () => {
     if (activeTab === 'users' && isAdmin) {
       const fetchUsers = async () => {
         try {
-          const snapshot = await getDocs(collection(db, 'users'));
-          setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          setUsers(await apiGet<any[]>('/users'));
         } catch (err) {
-          handleFirestoreError(err, OperationType.LIST, 'users');
+          logError(err, '/users');
         }
       };
       fetchUsers();
@@ -43,11 +45,11 @@ export const Admin: React.FC = () => {
 
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { role: newRole });
+      await apiPatch(`/users/${userId}/role`, { role: newRole });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
       setStatus({ type: 'success', message: 'Permissão atualizada!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      logError(err, `/users/${userId}/role`);
       setStatus({ type: 'error', message: 'Erro ao atualizar permissão.' });
     }
   };
@@ -55,9 +57,15 @@ export const Admin: React.FC = () => {
   const handleSeed = async () => {
     if (confirm('Deseja resetar o menu? Isso irá apagar os itens atuais e carregar a nova lista de produtos (Hambúrgueres, Bebidas, Sobremesas, etc).')) {
       setIsSeeding(true);
-      await seedDatabase();
-      setIsSeeding(false);
-      setStatus({ type: 'success', message: 'Menu atualizado com sucesso!' });
+      try {
+        await apiPost('/seed');
+        setStatus({ type: 'success', message: 'Menu atualizado com sucesso!' });
+      } catch (err) {
+        logError(err, '/seed');
+        setStatus({ type: 'error', message: 'Erro ao atualizar o menu.' });
+      } finally {
+        setIsSeeding(false);
+      }
     }
   };
 
@@ -74,6 +82,8 @@ export const Admin: React.FC = () => {
         setTempImage(editingItem.url || '');
       } else if (activeTab === 'banners') {
         setTempImage(editingItem.mediaUrl || '');
+      } else if (activeTab === 'teasers') {
+        setTempImage(editingItem.image || '');
       } else if (activeTab === 'zones') {
         setTempImage('');
       } else if (activeTab === 'about' && editingItem.name) { // Team member
@@ -120,30 +130,15 @@ export const Admin: React.FC = () => {
         </div>
         {!user?.email && (
           <div className="space-y-4">
-            <button
-              onClick={async () => {
-                if (isLoggingIn) return;
-                setIsLoggingIn(true);
-                try {
-                  await loginWithGoogle();
-                } catch (err: any) {
-                  if (err.code === 'auth/popup-blocked') {
-                    setStatus({ type: 'error', message: 'O seu navegador bloqueou o pop-up de login. Por favor, permita pop-ups para este site.' });
-                  } else if (err.code !== 'auth/cancelled-popup-request') {
-                    setStatus({ type: 'error', message: 'Erro ao entrar com Google.' });
-                  }
-                } finally {
-                  setIsLoggingIn(false);
-                }
-              }}
-              disabled={isLoggingIn}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all shadow-xl shadow-primary/20 flex items-center justify-center space-x-3 disabled:opacity-50"
+            <Link
+              to="/login"
+              className="w-full py-4 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all shadow-xl shadow-primary/20 flex items-center justify-center space-x-3"
             >
               <LogIn size={24} />
-              <span>{isLoggingIn ? 'A entrar...' : 'Entrar como Admin'}</span>
-            </button>
+              <span>Entrar como Admin</span>
+            </Link>
             <p className="text-xs text-zinc-400">
-              Nota: Se a janela de login não abrir, verifique se o seu navegador está a bloquear pop-ups.
+              Inicie sessão com o email e palavra-passe da conta de administrador.
             </p>
           </div>
         )}
@@ -157,7 +152,6 @@ export const Admin: React.FC = () => {
     const data = Object.fromEntries(formData.entries());
     
     try {
-      const settingsRef = doc(db, 'siteSettings', 'main');
       const updateData: any = { ...data };
       if (updateData.deliveryFee) updateData.deliveryFee = Number(updateData.deliveryFee);
       if (tempImage && activeTab === 'settings') updateData.heroImage = tempImage;
@@ -170,10 +164,10 @@ export const Admin: React.FC = () => {
         if (countdownRaw) updateData.countdownTargetDate = new Date(`${countdownRaw}:00+01:00`).toISOString();
       }
 
-      await updateDoc(settingsRef, updateData);
+      await apiPut('/settings/main', updateData);
       setStatus({ type: 'success', message: 'Definições guardadas com sucesso!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'siteSettings/main');
+      logError(err, '/settings/main');
       setStatus({ type: 'error', message: 'Erro ao guardar definições.' });
     }
   };
@@ -188,15 +182,15 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        await updateDoc(doc(db, 'categories', editingItem.id), data);
+        await apiPut(`/categories/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'categories'), data);
+        await apiPost('/categories', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Categoria guardada!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'categories');
+      logError(err, 'categories');
       setStatus({ type: 'error', message: 'Erro ao guardar categoria.' });
     }
   };
@@ -229,15 +223,15 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        await updateDoc(doc(db, 'menuItems', editingItem.id), data);
+        await apiPut(`/menuItems/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'menuItems'), data);
+        await apiPost('/menuItems', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Prato guardado!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'menuItems');
+      logError(err, 'menuItems');
       setStatus({ type: 'error', message: 'Erro ao guardar prato.' });
     }
   };
@@ -257,10 +251,10 @@ export const Admin: React.FC = () => {
     };
 
     try {
-      await setDoc(doc(db, 'siteSettings', 'about'), data);
+      await apiPut('/about/about', data);
       setStatus({ type: 'success', message: 'Conteúdo "Sobre Nós" guardado!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'siteSettings/about');
+      logError(err, '/about/about');
       setStatus({ type: 'error', message: 'Erro ao guardar conteúdo.' });
     }
   };
@@ -277,15 +271,15 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        await updateDoc(doc(db, 'gallery', editingItem.id), data);
+        await apiPut(`/gallery/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'gallery'), data);
+        await apiPost('/gallery', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Imagem da galeria guardada!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'gallery');
+      logError(err, 'gallery');
       setStatus({ type: 'error', message: 'Erro ao guardar imagem.' });
     }
   };
@@ -302,26 +296,30 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        await updateDoc(doc(db, 'team', editingItem.id), data);
+        await apiPut(`/team/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'team'), data);
+        await apiPost('/team', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Membro da equipa guardado!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'team');
+      logError(err, 'team');
       setStatus({ type: 'error', message: 'Erro ao guardar membro.' });
     }
   };
 
   const handleDelete = async (coll: string, id: string) => {
+    if (coll === 'users') {
+      setStatus({ type: 'error', message: 'Contas de utilizadores não podem ser eliminadas daqui.' });
+      return;
+    }
     if (confirm('Tem a certeza que deseja eliminar este item?')) {
       try {
-        await deleteDoc(doc(db, coll, id));
+        await apiDelete(`/${resourceOf(coll)}/${id}`);
         setStatus({ type: 'success', message: 'Item eliminado!' });
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `${coll}/${id}`);
+        logError(err, `${coll}/${id}`);
         setStatus({ type: 'error', message: 'Erro ao eliminar item.' });
       }
     }
@@ -355,26 +353,70 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        await updateDoc(doc(db, 'banners', editingItem.id), data);
+        await apiPut(`/banners/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'banners'), data);
+        await apiPost('/banners', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Banner guardado!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'banners');
+      logError(err, 'banners');
       setStatus({ type: 'error', message: 'Erro ao guardar banner.' });
     }
   };
 
   const handleToggleBannerActive = async (banner: Banner) => {
     try {
-      await updateDoc(doc(db, 'banners', banner.id), { active: !banner.active });
+      await apiPatch(`/banners/${banner.id}`, { active: !banner.active });
       setStatus({ type: 'success', message: banner.active ? 'Banner desativado!' : 'Banner ativado!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `banners/${banner.id}`);
+      logError(err, `banners/${banner.id}`);
       setStatus({ type: 'error', message: 'Erro ao atualizar banner.' });
+    }
+  };
+
+  // ======================= Countdown teaser cards =======================
+
+  const handleSaveTeaser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const data = {
+      name: ((formData.get('name') as string) || '').trim(),
+      description: ((formData.get('description') as string) || '').trim(),
+      image: tempImage,
+      order: Number(formData.get('order')) || 0,
+      enabled: formData.get('enabled') === 'on',
+    };
+
+    if (!data.name) {
+      setStatus({ type: 'error', message: 'Dê um título à prévia.' });
+      return;
+    }
+
+    try {
+      if (editingItem?.id) {
+        await apiPut(`/teasers/${editingItem.id}`, data);
+      } else {
+        await apiPost('/teasers', data);
+      }
+      setIsModalOpen(false);
+      setEditingItem(null);
+      setStatus({ type: 'success', message: 'Prévia guardada!' });
+    } catch (err) {
+      logError(err, 'teasers');
+      setStatus({ type: 'error', message: 'Erro ao guardar prévia.' });
+    }
+  };
+
+  const handleToggleTeaser = async (teaser: Teaser) => {
+    try {
+      await apiPatch(`/teasers/${teaser.id}`, { enabled: teaser.enabled === false });
+      setStatus({ type: 'success', message: teaser.enabled === false ? 'Prévia ativada!' : 'Prévia desativada!' });
+    } catch (err) {
+      logError(err, `teasers/${teaser.id}`);
+      setStatus({ type: 'error', message: 'Erro ao atualizar prévia.' });
     }
   };
 
@@ -399,35 +441,28 @@ export const Admin: React.FC = () => {
 
     try {
       if (editingItem?.id) {
-        // setDoc so default (non-persisted) zones can be edited in place
-        await setDoc(doc(db, 'deliveryZones', editingItem.id), data);
+        // PUT so default (non-persisted) zones can be saved in place
+        await apiPut(`/zones/${editingItem.id}`, data);
       } else {
-        await addDoc(collection(db, 'deliveryZones'), data);
+        await apiPost('/zones', data);
       }
       setIsModalOpen(false);
       setEditingItem(null);
       setStatus({ type: 'success', message: 'Zona guardada!' });
     } catch (err) {
-      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'deliveryZones');
+      logError(err, 'zones');
       setStatus({ type: 'error', message: 'Erro ao guardar zona.' });
     }
   };
 
-  /** Enable/disable a zone. Default zones (not yet in Firestore) are persisted on first toggle. */
+  /** Enable/disable a zone. Default zones (not yet in the database) are persisted on first toggle. */
   const handleToggleZoneEnabled = async (zone: DeliveryZone) => {
     try {
-      await updateDoc(doc(db, 'deliveryZones', zone.id), { enabled: !zone.enabled });
+      await apiPut(`/zones/${zone.id}`, { ...zone, enabled: !zone.enabled });
       setStatus({ type: 'success', message: zone.enabled ? 'Zona desativada!' : 'Zona ativada!' });
-    } catch {
-      // Zone only exists as a client-side default — persist it now
-      try {
-        const { id, ...zoneData } = { ...zone, enabled: !zone.enabled };
-        await setDoc(doc(db, 'deliveryZones', id), zoneData);
-        setStatus({ type: 'success', message: zone.enabled ? 'Zona desativada!' : 'Zona ativada!' });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `deliveryZones/${zone.id}`);
-        setStatus({ type: 'error', message: 'Erro ao atualizar zona.' });
-      }
+    } catch (err) {
+      logError(err, `zones/${zone.id}`);
+      setStatus({ type: 'error', message: 'Erro ao atualizar zona.' });
     }
   };
 
@@ -436,11 +471,11 @@ export const Admin: React.FC = () => {
     try {
       for (const zone of DEFAULT_ZONES) {
         const { id, ...zoneData } = zone;
-        await setDoc(doc(db, 'deliveryZones', id), zoneData);
+        await apiPut(`/zones/${id}`, zoneData);
       }
       setStatus({ type: 'success', message: 'Zonas padrão restauradas!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'deliveryZones');
+      logError(err, 'zones');
       setStatus({ type: 'error', message: 'Erro ao restaurar zonas.' });
     }
   };
@@ -450,10 +485,10 @@ export const Admin: React.FC = () => {
   const handleToggleDishAvailability = async (item: MenuItem) => {
     const newState = item.isAvailable === false; // currently sold out -> becomes available
     try {
-      await updateDoc(doc(db, 'menuItems', item.id), { isAvailable: newState });
+      await apiPatch(`/menuItems/${item.id}`, { isAvailable: newState });
       setStatus({ type: 'success', message: newState ? 'Prato marcado como disponível!' : 'Prato marcado como esgotado!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `menuItems/${item.id}`);
+      logError(err, `menuItems/${item.id}`);
       setStatus({ type: 'error', message: 'Erro ao atualizar disponibilidade.' });
     }
   };
@@ -462,10 +497,10 @@ export const Admin: React.FC = () => {
 
   const handleToggleDishRatingHidden = async (rating: DishRating) => {
     try {
-      await updateDoc(doc(db, 'dishRatings', rating.id), { isHidden: !rating.isHidden });
+      await apiPatch(`/dishRatings/${rating.id}`, { isHidden: !rating.isHidden });
       setStatus({ type: 'success', message: rating.isHidden ? 'Avaliação reactivada!' : 'Avaliação oculta!' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `dishRatings/${rating.id}`);
+      logError(err, `dishRatings/${rating.id}`);
       setStatus({ type: 'error', message: 'Erro ao atualizar avaliação.' });
     }
   };
@@ -514,6 +549,7 @@ export const Admin: React.FC = () => {
           { id: 'categories', label: 'Categorias', icon: <LayoutGrid size={18} /> },
           { id: 'menu', label: 'Menu', icon: <Utensils size={18} /> },
           { id: 'banners', label: 'Banners', icon: <MonitorPlay size={18} /> },
+          { id: 'teasers', label: 'Prévias', icon: <Sparkles size={18} /> },
           { id: 'zones', label: 'Zonas', icon: <MapPin size={18} /> },
           { id: 'gallery', label: 'Galeria', icon: <ImageIcon size={18} /> },
           { id: 'about', label: 'Sobre Nós', icon: <Users size={18} /> },
@@ -584,6 +620,18 @@ export const Admin: React.FC = () => {
                   className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
                 />
                 <p className="text-[11px] text-zinc-400">Hora local de Angola (UTC+1). Após esta data, o site mostra o banner "Já estamos a entregar!".</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Vídeo de Fundo da Contagem (MP4)</label>
+                <input
+                  name="countdownBgVideo"
+                  defaultValue={settings?.countdownBgVideo || ''}
+                  placeholder="/videos/countdown-bg.mp4 ou https://.../video.mp4"
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
+                />
+                <p className="text-[11px] text-zinc-400">
+                  Vídeo que aparece no fundo da contagem regressiva. Usa "/videos/countdown-bg.mp4" se deixares o campo vazio.
+                </p>
               </div>
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input type="checkbox" name="countdownEnabled" defaultChecked={settings?.countdownEnabled !== false} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
@@ -779,6 +827,72 @@ export const Admin: React.FC = () => {
               {banners.length === 0 && (
                 <div className="col-span-full text-center py-12 text-zinc-400">
                   Nenhum banner. Clique em "Novo Banner" para adicionar o primeiro.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'teasers' && (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center gap-4">
+              <div>
+                <h3 className="text-2xl font-black text-zinc-900">Prévias da Contagem</h3>
+                <p className="text-sm text-zinc-500">
+                  Imagens e descrições dos cartões "Em Breve" que aparecem no fim da contagem regressiva.
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Edita aqui a foto e a descrição de cada bloco. Se esta lista ficar vazia, o site volta a mostrar
+                  automaticamente os pratos marcados como "Novidade" no menu.
+                </p>
+              </div>
+              <button onClick={() => { setEditingItem({}); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center space-x-2 shrink-0">
+                <Plus size={20} />
+                <span>Nova Prévia</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {teasers.map((teaser) => (
+                <div key={teaser.id} className={`bg-zinc-50 rounded-2xl overflow-hidden border border-black/5 flex flex-col ${teaser.enabled === false ? 'opacity-60' : ''}`}>
+                  {teaser.image ? (
+                    <img src={teaser.image} alt="" loading="lazy" className="h-40 w-full object-cover" />
+                  ) : (
+                    <div className="h-40 w-full bg-zinc-100 flex items-center justify-center text-zinc-400">
+                      <Sparkles size={32} />
+                    </div>
+                  )}
+                  <div className="p-4 flex-grow space-y-2">
+                    <h4 className="font-bold text-zinc-900">{teaser.name}</h4>
+                    <p className="text-sm text-zinc-500 line-clamp-2">{teaser.description}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-zinc-200 text-zinc-600 text-[10px] font-black uppercase rounded-full">
+                        Ordem {teaser.order}
+                      </span>
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${teaser.enabled === false ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                        {teaser.enabled === false ? 'Inativa' : 'Ativa'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-black/5 flex justify-end space-x-2">
+                    <button
+                      onClick={() => handleToggleTeaser(teaser)}
+                      title={teaser.enabled === false ? 'Ativar' : 'Desativar'}
+                      className={`p-2 transition-colors ${teaser.enabled === false ? 'text-zinc-400 hover:text-green-500' : 'text-green-500 hover:text-zinc-400'}`}
+                    >
+                      <Power size={18} />
+                    </button>
+                    <button onClick={() => { setEditingItem(teaser); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-primary transition-colors">
+                      <Edit2 size={18} />
+                    </button>
+                    <button onClick={() => handleDelete('teasers', teaser.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {teasers.length === 0 && (
+                <div className="col-span-full text-center py-12 text-zinc-400">
+                  Sem prévias criadas. Ascards dos pratos "Novidade" continuam a aparecer.
                 </div>
               )}
             </div>
@@ -1036,10 +1150,10 @@ export const Admin: React.FC = () => {
                       <button 
                         onClick={async () => {
                           try {
-                            await updateDoc(doc(db, 'reviews', review.id), { isApproved: true });
+                            await apiPatch(`/reviews/${review.id}`, { isApproved: true });
                             setStatus({ type: 'success', message: 'Avaliação aprovada!' });
                           } catch (err) {
-                            handleFirestoreError(err, OperationType.UPDATE, `reviews/${review.id}`);
+                            logError(err, `reviews/${review.id}`);
                           }
                         }}
                         className="p-2 text-green-500 hover:bg-green-50 rounded-xl transition-all"
@@ -1136,6 +1250,7 @@ export const Admin: React.FC = () => {
                     activeTab === 'gallery' ? 'Imagem' :
                     activeTab === 'about' ? 'Membro da Equipa' :
                     activeTab === 'banners' ? 'Banner' :
+                    activeTab === 'teasers' ? 'Prévia' :
                     activeTab === 'zones' ? 'Zona de Entrega' :
                     'Prato'
                   }
@@ -1258,6 +1373,33 @@ export const Admin: React.FC = () => {
                   <label className="flex items-center space-x-3 cursor-pointer">
                     <input type="checkbox" name="active" defaultChecked={editingItem?.id ? editingItem?.active !== false : true} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
                     <span className="text-sm font-bold text-zinc-900">Banner ativo</span>
+                  </label>
+                  <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all">Guardar</button>
+                </form>
+              ) : activeTab === 'teasers' ? (
+                <form onSubmit={handleSaveTeaser} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Nome do prato / anúncio</label>
+                    <input name="name" defaultValue={editingItem?.name} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Descrição (aparece por baixo do nome)</label>
+                    <textarea name="description" defaultValue={editingItem?.description} rows={2} placeholder="Pão, carne, queijo e molho da casa" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all resize-none" />
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Imagem</label>
+                      <input name="image" value={tempImage} onChange={(e) => setTempImage(e.target.value)} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <ImageUpload label="Ou faça upload da imagem" currentImage={tempImage} onUpload={setTempImage} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ordem</label>
+                    <input name="order" type="number" defaultValue={editingItem?.order ?? teasers.length + 1} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                  </div>
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" name="enabled" defaultChecked={editingItem?.id ? editingItem?.enabled !== false : true} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                    <span className="text-sm font-bold text-zinc-900">Mostrar esta prévia na contagem</span>
                   </label>
                   <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all">Guardar</button>
                 </form>

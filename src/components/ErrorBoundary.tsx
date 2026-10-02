@@ -39,10 +39,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
       let errorMessage = 'Ocorreu um erro inesperado.';
       
       try {
-        // Try to parse Firestore error JSON
+        // Try to parse an API error payload
         if (error?.message) {
           const parsed = JSON.parse(error.message);
-          if (parsed.error && parsed.error.includes('permission-denied')) {
+          if (parsed.error && String(parsed.error).toLowerCase().includes('permiss')) {
             errorMessage = 'Permissão insuficiente para realizar esta operação.';
           }
         }

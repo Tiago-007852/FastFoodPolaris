@@ -3,10 +3,10 @@ import type { Banner } from './types';
 /**
  * Galeria de fotos que passam no carousel principal da homepage.
  *
- * É usada quando ainda não existem banners vindos do Firestore (site novo,
- * regras por publicar ou offline) — assim o hero nunca fica com uma única
+ * É usada quando ainda não existem banners vindos da base de dados (site novo,
+ * API indisponível ou offline) — assim o hero nunca fica com uma única
  * imagem parada. São `Banner` normais, por isso assim que o admin criar,
- * trocar ou remover banners no painel, o Firestore passa a mandar e esta
+ * trocar ou remover banners no painel, o Postgres passa a mandar e esta
  * galeria deixa de aparecer.
  */
 export const DEFAULT_HERO_SLIDES: Banner[] = [

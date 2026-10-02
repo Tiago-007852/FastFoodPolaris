@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BellRing, ChevronRight, Play, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { apiGet, subscribeToChanges } from '../../lib/api';
 import { useSite } from '../../SiteContext';
-import { db } from '../../firebase';
 import { useToast } from '../ToastProvider';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { bannersForPlacement } from '../HeroCarousel';
@@ -18,7 +17,6 @@ import {
   markSubscriberCredited,
   type CountdownValues,
 } from './shared';
-import { FireBurnStyle } from './FireBurnStyle';
 import { LiquidFillStyle } from './LiquidFillStyle';
 import { CircleProgressStyle } from './CircleProgressStyle';
 import { EmojiCascadeStyle } from './EmojiCascadeStyle';
@@ -57,9 +55,10 @@ const IMPL_CSS = `
 }
 `;
 
-/** The 5 rotating visual styles, indexed by hours remaining % 5. */
-const STYLE_COMPONENTS = [FireBurnStyle, LiquidFillStyle, CircleProgressStyle, EmojiCascadeStyle, MorphingNumbersStyle];
-const STYLE_NAMES = ['🔥 Fire Burn', '💧 Liquid Fill', '⭕ Circle Progress', '🎉 Emoji Cascade', '✨ Morphing Numbers'];
+/** The rotating visual styles, indexed by hours remaining % STYLE_COUNT. */
+const STYLE_COMPONENTS = [LiquidFillStyle, CircleProgressStyle, EmojiCascadeStyle, MorphingNumbersStyle];
+const STYLE_NAMES = ['💧 Liquid Fill', '⭕ Circle Progress', '🎉 Emoji Cascade', '✨ Morphing Numbers'];
+const STYLE_COUNT = STYLE_COMPONENTS.length;
 
 const FEATURES = [
   { icon: '🛵', label: 'Entregas Rápidas' },
@@ -71,13 +70,13 @@ const FEATURES = [
 
 /**
  * Feature 6 — Cinematic launch countdown.
- * Full-bleed looping video background, 5 rotating visual styles that change
- * automatically every hour (hours remaining % 5), blurred teaser dishes with
+ * Full-bleed looping video background (admin editable), 4 rotating visual styles
+ * that change automatically every hour (hours remaining % 4), teaser cards with
  * preview modal, WhatsApp notify flow, live subscriber counter and confetti
  * at zero.
  */
 export const CountdownSectionImpl: React.FC = () => {
-  const { settings, menuItems, banners } = useSite();
+  const { settings, menuItems, banners, teasers: managedTeasers } = useSite();
   const { showToast } = useToast();
   const reducedMotion = usePrefersReducedMotion();
 
@@ -108,23 +107,30 @@ export const CountdownSectionImpl: React.FC = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // ---- Live notification counter: real-time count of notificationSubscribers ----
+  // ---- Live notification counter: real-time count from the API ----
   useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, 'notificationSubscribers')),
-      (snapshot) => {
-        setSubscriberCount(snapshot.size);
-        if (snapshot.size > 0) {
+    let pulse: number | undefined;
+    const load = async () => {
+      try {
+        const { count } = await apiGet<{ count: number }>('/subscribers/count');
+        setSubscriberCount(count);
+        if (count > 0) {
           setCountPulse(true);
-          window.setTimeout(() => setCountPulse(false), 450);
+          pulse = window.setTimeout(() => setCountPulse(false), 450);
         }
-      },
-      (error) => {
-        // Collection may not exist yet / rules — the local counter keeps working
-        console.error('notificationSubscribers listener:', error);
-      },
-    );
-    return () => unsub();
+      } catch (error) {
+        // The local counter keeps working when the API is unreachable.
+        console.error('subscriber count:', error);
+      }
+    };
+    load();
+    const unsubscribe = subscribeToChanges((table) => {
+      if (table === 'subscribers') load();
+    });
+    return () => {
+      unsubscribe();
+      if (pulse) window.clearTimeout(pulse);
+    };
   }, []);
 
   /**
@@ -147,8 +153,8 @@ export const CountdownSectionImpl: React.FC = () => {
   const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
   const enabled = settings?.countdownEnabled !== false; // master switch (default: on)
 
-  // Custom video URL from Firestore (admin-configurable, not in SiteSettings type yet)
-  const videoSrc: string = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
+  // Custom video URL from the site settings (admin-configurable)
+  const videoSrc: string = settings?.countdownBgVideo?.trim() || DEFAULT_VIDEO;
   /* The video element is always rendered unless it actually failed to load.
      Reduced motion only disables AUTOPLAY (the manual play button still lets
      the visitor start it) — gating the element itself made the section show a
@@ -234,7 +240,7 @@ export const CountdownSectionImpl: React.FC = () => {
 
   // ---- Countdown maths (computed before any early return) ----
   const totalSecondsRemaining = Math.max(0, Math.floor((target - now) / 1000));
-  const styleIndex = Math.floor(totalSecondsRemaining / 3600) % 5;
+  const styleIndex = Math.floor(totalSecondsRemaining / 3600) % STYLE_COUNT;
 
   // ---- Style-change toast (only after mount, when styleIndex actually changes) ----
   useEffect(() => {
@@ -275,8 +281,8 @@ export const CountdownSectionImpl: React.FC = () => {
     };
   }, [now, target]);
 
-  // ---- Teaser dishes (hook before early returns): real "Novidade" dishes first ----
-  const teasers = useMemo(() => buildTeasers(menuItems), [menuItems]);
+  // ---- Teaser cards (hook before early returns): admin cards, then "Novidade" dishes ----
+  const teasers = useMemo(() => buildTeasers(menuItems, managedTeasers), [menuItems, managedTeasers]);
 
   if (!enabled) return null;
 
@@ -400,10 +406,10 @@ export const CountdownSectionImpl: React.FC = () => {
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-secondary/15 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
         {/* Headline */}
         <div className="text-center space-y-6 mb-14">
-          <h2 className="text-4xl md:text-6xl font-black text-white tracking-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-6xl font-black text-white tracking-tight">
             🚀 As Entregas Chegam ao Huambo em...
           </h2>
           <p className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto">
@@ -412,7 +418,7 @@ export const CountdownSectionImpl: React.FC = () => {
         </div>
 
         {/* ---- Rotating style countdown with 600ms crossfade ---- */}
-        <div className="flex items-center justify-center min-h-[260px] mb-6">
+        <div className="flex items-center justify-center min-h-[190px] sm:min-h-[260px] mb-6 w-full">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={styleIndex}
@@ -420,7 +426,7 @@ export const CountdownSectionImpl: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.6, ease: 'easeInOut' }}
-              className="w-full flex justify-center"
+              className="w-full flex justify-center px-1"
             >
               <StyleComponent countdown={countdown} isMobile={isMobile} reduced={reducedMotion} />
             </motion.div>
@@ -459,7 +465,7 @@ export const CountdownSectionImpl: React.FC = () => {
               creditSubscriber();
               setNotifyOpen(true);
             }}
-            className="px-10 py-5 bg-primary hover:bg-primary-hover text-white rounded-full font-black text-lg transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 hover:scale-[1.02] active:scale-[0.98]"
+            className="px-6 sm:px-10 py-4 sm:py-5 bg-primary hover:bg-primary-hover text-white rounded-full font-black text-base sm:text-lg transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 max-w-full hover:scale-[1.02] active:scale-[0.98]"
           >
             <BellRing size={22} />
             Quero ser Notificado

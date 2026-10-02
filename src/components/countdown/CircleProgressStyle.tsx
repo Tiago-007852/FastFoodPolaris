@@ -29,15 +29,15 @@ const UNITS: { key: 'days' | 'hours' | 'minutes' | 'seconds'; label: string }[] 
  * dark-gray track, white digit centered. Rings in a row, labels below.
  */
 export const CircleProgressStyle: React.FC<CountdownStyleProps> = ({ countdown, isMobile, reduced }) => {
-  const size = isMobile ? 80 : 120;
-  const stroke = 8;
+  const size = isMobile ? 64 : 120;
+  const stroke = isMobile ? 6 : 8;
   const r = (size - stroke) / 2 - 2;
   const c = 2 * Math.PI * r;
 
   return (
     <div>
       <style>{CIRCLE_CSS}</style>
-      <div className="flex justify-center items-start gap-2 sm:gap-5">
+      <div className="flex justify-center items-start gap-1 sm:gap-5 w-full px-1">
         {UNITS.map((u, idx) => {
           const progress = unitProgress(countdown[u.key], u.key);
           // Ring depletes with remaining time: full ring at max remaining, empty at 0
@@ -47,13 +47,13 @@ export const CircleProgressStyle: React.FC<CountdownStyleProps> = ({ countdown, 
               {idx > 0 && (
                 <span
                   className="font-black self-center text-white/50"
-                  style={{ fontSize: 'clamp(24px, 5vw, 48px)', marginTop: isMobile ? 36 : 52 }}
+                  style={{ fontSize: 'clamp(12px, 3vw, 48px)' }}
                   aria-hidden="true"
                 >
                   :
                 </span>
               )}
-              <div className="circle-unit rounded-3xl px-2 sm:px-4 py-4 text-center min-w-[64px] sm:min-w-[104px]">
+              <div className="circle-unit rounded-2xl sm:rounded-3xl px-1 sm:px-4 py-2 sm:py-4 text-center min-w-0 flex-1 sm:flex-none sm:min-w-[104px] max-w-[150px]">
                 <div className="relative mx-auto" style={{ width: size, height: size }}>
                   <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block">
                     {/* Dark gray track */}
@@ -77,12 +77,12 @@ export const CircleProgressStyle: React.FC<CountdownStyleProps> = ({ countdown, 
                   {/* White digit centered inside the ring */}
                   <span
                     className="absolute inset-0 flex items-center justify-center font-black tabular-nums text-white"
-                    style={{ fontSize: isMobile ? 26 : 40, textShadow: '0 2px 10px rgba(0,0,0,.5)' }}
+                    style={{ fontSize: isMobile ? 20 : 40, textShadow: '0 2px 10px rgba(0,0,0,.5)' }}
                   >
                     {formatDigit(countdown[u.key])}
                   </span>
                 </div>
-                <p className="text-[9px] sm:text-xs font-bold uppercase tracking-widest text-white mt-3">{u.label}</p>
+                <p className="text-[8px] sm:text-xs font-bold uppercase tracking-widest text-white mt-2 sm:mt-3 truncate">{u.label}</p>
               </div>
             </React.Fragment>
           );

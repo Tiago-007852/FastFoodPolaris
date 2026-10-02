@@ -40,7 +40,7 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
       <p className="text-center text-xs font-bold uppercase tracking-widest text-white/40">
         O que está a chegar
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {teasers.map((dish, idx) => (
           <motion.button
             key={dish.id}
@@ -50,7 +50,7 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-40px' }}
             transition={{ duration: 0.55, delay: reduced ? 0 : idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
-            className="teaser-card group relative h-56 sm:h-60 rounded-3xl bg-zinc-900 border overflow-hidden text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/60 transition-transform duration-300 hover:-translate-y-1"
+            className="teaser-card group relative h-60 sm:h-60 rounded-3xl bg-zinc-900 border overflow-hidden text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/60 transition-transform duration-300 hover:-translate-y-1"
           >
             {/* Real food photography — blurred as a teaser, sharpens on hover */}
             {dish.image ? (
@@ -73,14 +73,14 @@ export const TeaserSection: React.FC<{ teasers: TeaserItem[] }> = ({ teasers }) 
               <BadgeChip label="Em Breve" />
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 z-[1] p-4">
-              <p className="text-white font-bold leading-tight drop-shadow">{dish.name}</p>
-              <p className="text-white/65 text-[11px] mt-0.5 line-clamp-1">{dish.description}</p>
+            <div className="absolute inset-x-0 bottom-0 z-[1] p-3 sm:p-4">
+              <p className="text-white font-bold leading-tight drop-shadow text-sm sm:text-base line-clamp-2">{dish.name}</p>
+              <p className="text-white/65 text-[11px] mt-0.5 line-clamp-2">{dish.description}</p>
             </div>
 
             {/* Hover preview label */}
             <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pb-3.5 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 pointer-events-none">
-              <span className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur text-white text-[11px] font-bold flex items-center gap-1.5">
+              <span className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur text-white text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap">
                 <Eye size={13} />
                 Clica para ver uma prévia
               </span>

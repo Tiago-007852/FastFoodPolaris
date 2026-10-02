@@ -1,12 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
 import { DeliveryZone } from './types';
-import { handleFirestoreError, OperationType } from './firestoreUtils';
+import { useLiveResource } from './lib/useLiveResource';
 
 /**
  * Default delivery zones for Huambo (Feature 3).
- * These are used when the admin has not configured any zone in Firestore yet,
+ * These are used when the admin has not configured any zone in the database yet,
  * so the delivery flow always works. Ids are prefixed with "default-" so the
  * admin panel can tell they have not been persisted yet.
  */
@@ -22,7 +20,7 @@ export const DEFAULT_ZONES: DeliveryZone[] = [
 /**
  * Bairros of Huambo the customer can choose from. Each bairro points to the
  * zone that covers it (matched by zone NAME, so it works with both the
- * hardcoded defaults and the admin-managed Firestore documents).
+ * hardcoded defaults and the admin-managed database rows).
  * The admin panel can still add/remove neighborhoods per zone — anything
  * configured there shows up in the list as well.
  */
@@ -88,7 +86,7 @@ const AREA_STORAGE_KEY = 'polaris_delivery_area';
 
 export const ZonesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Start with the hardcoded defaults so the site works even before seeding
-  const [zones, setZones] = useState<DeliveryZone[]>(DEFAULT_ZONES);
+  const liveZones = useLiveResource<DeliveryZone[]>('zones', DEFAULT_ZONES);
   const [selectedArea, setSelectedArea] = useState<string>(() => {
     try {
       return localStorage.getItem(AREA_STORAGE_KEY) || '';
@@ -97,17 +95,8 @@ export const ZonesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  // Live subscription to the admin-managed zone collection
-  useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, 'deliveryZones'), orderBy('order')), (snapshot) => {
-      const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DeliveryZone));
-      if (fetched.length > 0) setZones(fetched);
-      // Empty collection keeps the hardcoded defaults above
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'deliveryZones', false);
-    });
-    return () => unsub();
-  }, []);
+  // Empty response keeps the hardcoded defaults above
+  const zones = liveZones.data.length > 0 ? liveZones.data : DEFAULT_ZONES;
 
   const enabledZones = zones.filter(z => z.enabled !== false);
 

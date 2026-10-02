@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, MessageSquare, Send, X, CheckCircle2, AlertCircle } from 'lucide-react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { apiPost } from '../lib/api';
 import { useSite } from '../SiteContext';
 import { useAuth } from '../AuthContext';
-import { handleFirestoreError, OperationType } from '../firestoreUtils';
 
 export const ReviewsSection: React.FC = () => {
   const { reviews } = useSite();
@@ -14,7 +12,7 @@ export const ReviewsSection: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
-  const [userName, setUserName] = useState(user?.displayName || '');
+  const [userName, setUserName] = useState(user?.name || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [visibleCount, setVisibleCount] = useState(3);
@@ -27,13 +25,10 @@ export const ReviewsSection: React.FC = () => {
     setSubmitStatus('idle');
 
     try {
-      await addDoc(collection(db, 'reviews'), {
+      await apiPost('/reviews', {
         userName,
         comment,
         rating,
-        date: serverTimestamp(),
-        userId: user?.uid || null,
-        isApproved: false // Set to false for moderation
       });
       
       setSubmitStatus('success');
@@ -46,7 +41,6 @@ export const ReviewsSection: React.FC = () => {
     } catch (error) {
       console.error("Error submitting review:", error);
       setSubmitStatus('error');
-      handleFirestoreError(error, OperationType.CREATE, 'reviews');
     } finally {
       setIsSubmitting(false);
     }

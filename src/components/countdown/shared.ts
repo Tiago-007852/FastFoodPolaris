@@ -1,4 +1,4 @@
-import type { MenuItem } from '../../types';
+import type { MenuItem, Teaser } from '../../types';
 
 /** Default countdown target: October 5, 2026 at 00:00:00 Angola time (UTC+1). */
 export const DEFAULT_TARGET = '2026-10-05T00:00:00+01:00';
@@ -131,8 +131,26 @@ export interface TeaserItem {
   emoji: string;
 }
 
-/** Builds the teaser list: real "Novidade" menu dishes first, fallback teasers fill the rest. */
-export const buildTeasers = (menuItems: MenuItem[]): TeaserItem[] => {
+/**
+ * Builds the teaser list for the countdown section.
+ * Admin-managed teaser cards always win; with none configured we fall back to
+ * the "Novidade" menu dishes and then to the built-in food photography.
+ */
+export const buildTeasers = (menuItems: MenuItem[], managed: Teaser[] = []): TeaserItem[] => {
+  const active = managed
+    .filter(t => t && t.enabled !== false && (t.name || t.image))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  if (active.length > 0) {
+    return active.map((t, i) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      image: t.image,
+      emoji: DEFAULT_TEASERS[i % DEFAULT_TEASERS.length].emoji,
+    }));
+  }
+
   const fallbackFor = (idx: number): TeaserItem => {
     const t = DEFAULT_TEASERS[idx % DEFAULT_TEASERS.length];
     return {

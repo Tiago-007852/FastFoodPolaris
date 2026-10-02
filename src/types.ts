@@ -98,6 +98,18 @@ export interface SiteSettings {
   countdownTargetDate?: string;
   /** Master switch for the countdown section */
   countdownEnabled?: boolean;
+  /** Background video of the countdown section (MP4 URL or data URL). Admin editable. */
+  countdownBgVideo?: string;
+}
+
+/** Teaser card shown in the countdown section ("O que está a chegar"). Admin editable. */
+export interface Teaser {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  order: number;
+  enabled: boolean;
 }
 
 export interface GalleryImage {

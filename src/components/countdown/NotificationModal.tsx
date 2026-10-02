@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BellRing } from 'lucide-react';
 import { Modal } from '../Modal';
 import { useSite } from '../../SiteContext';
+import { apiPost } from '../../lib/api';
 import { useToast } from '../ToastProvider';
 import { STORAGE_KEY } from './shared';
 
@@ -74,6 +75,11 @@ export const NotificationModal: React.FC<{
     } catch {
       // localStorage unavailable — flow continues
     }
+
+    // Store the lead in Postgres so the counter reflects real signups.
+    apiPost('/subscribers', { name: name.trim(), phone: digits }).catch((error) => {
+      console.error('Could not store subscriber:', error);
+    });
 
     showToast(`Obrigado ${name.trim().split(' ')[0]}! Vais ser notificado assim que as entregas estiverem disponíveis. 🎉`, 'success', 5000);
     onSubscribed?.();

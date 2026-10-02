@@ -2,8 +2,8 @@ import React, { Suspense } from 'react';
 
 /**
  * Feature 6 — Launch countdown (lazy wrapper).
- * The heavy implementation (video bg, canvas fire, emoji cascade, Firestore
- * counter, confetti) is code-split into ./countdown/CountdownSectionImpl and
+ * The heavy implementation (video bg, canvas fire, emoji cascade, live
+ * subscriber counter, confetti) is code-split into ./countdown/CountdownSectionImpl and
  * loaded on demand with a skeleton placeholder to avoid layout shift.
  */
 const CountdownSectionImpl = React.lazy(() =>
