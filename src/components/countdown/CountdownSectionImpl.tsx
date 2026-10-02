@@ -30,6 +30,23 @@ const IMPL_CSS = `
   100% { transform: scale(1); }
 }
 .counter-pulse { animation: counter-pulse 0.45s ease-out; }
+
+/* Mobile: keep the 16:9 video in a viewport-height band and dissolve it into
+   the still image below, instead of zooming a landscape clip into a tall
+   narrow box. From md up the section is wide enough for a full-bleed cover. */
+.countdown-video {
+  height: 70vh;
+  height: 70svh;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+}
+@media (min-width: 768px) {
+  .countdown-video {
+    height: 100%;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
 `;
 
 /** The 5 rotating visual styles, indexed by hours remaining % 5. */
@@ -257,9 +274,8 @@ export const CountdownSectionImpl: React.FC = () => {
 
       {/* ---- Cinematic video background (z-0, behind everything) ---- */}
       <div ref={bgRef} className="absolute inset-0 z-0 overflow-hidden bg-zinc-950" aria-hidden="true">
-        {/* Base layer: always a real food image, so the section never looks empty
-            while the video buffers or if autoplay/decode fails. Both layers use the
-            same object-fit so they stay perfectly aligned. */}
+        {/* Base layer: fills the WHOLE section at all sizes, so there is always a
+            real food image even while the video buffers or autoplay is blocked. */}
         <img
           src={FALLBACK_IMAGE}
           alt=""
@@ -269,6 +285,11 @@ export const CountdownSectionImpl: React.FC = () => {
           style={{ transform: 'translateZ(0)' }}
         />
         {showVideo && (
+          /* The source is 16:9. On tall, narrow phones a full-height cover crop
+             would zoom in ~4x and look blurry, so the video is confined to a
+             viewport-height cinematic band on mobile and masked into the still
+             image below. From md up the section is wide enough for a full-bleed
+             cover, so the video fills it entirely. */
           <video
             ref={videoRef}
             src={videoSrc}
@@ -280,10 +301,11 @@ export const CountdownSectionImpl: React.FC = () => {
             /* Mobile gets a lighter preload: 60fps @720p is heavy to fetch up front. */
             preload={isMobile ? 'metadata' : 'auto'}
             onError={() => setVideoFailed(true)}
-            className="absolute inset-0 w-full h-full"
-            /* translateZ promotes the video to its own GPU layer so the page
-               keeps scrolling smoothly while the video decodes. */
-            style={{ objectFit: 'cover', transform: 'translateZ(0)' }}
+            className="countdown-video absolute inset-x-0 top-0 w-full"
+            style={{
+              objectFit: 'cover',
+              transform: 'translateZ(0)',
+            }}
           />
         )}
         {/* Spec overlay gradient: rgba(0,0,0,.72) top → rgba(0,0,0,.55) bottom */}
