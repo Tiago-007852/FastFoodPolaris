@@ -104,6 +104,24 @@ export const CountdownSectionImpl: React.FC = () => {
   const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
   const enabled = settings?.countdownEnabled !== false; // master switch (default: on)
 
+  // Custom video URL from Firestore (admin-configurable, not in SiteSettings type yet)
+  const videoSrc: string = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
+  const showVideo = !reducedMotion && !videoFailed;
+
+  // ---- Video: force playback (some browsers need an explicit play call) ----
+  useEffect(() => {
+    if (!showVideo) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const tryPlay = () => {
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked — poster stays */ });
+    };
+    tryPlay();
+    v.addEventListener('canplay', tryPlay);
+    return () => v.removeEventListener('canplay', tryPlay);
+  }, [showVideo, videoSrc]);
+
   // ---- Video cleanup: pause + unload on unmount ----
   useEffect(() => {
     const v = videoRef.current;
@@ -207,10 +225,6 @@ export const CountdownSectionImpl: React.FC = () => {
   const StyleComponent = STYLE_COMPONENTS[styleIndex];
   const styleName = STYLE_NAMES[styleIndex];
 
-  // Custom video URL from Firestore (admin-configurable, not in SiteSettings type yet)
-  const videoSrc = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
-  const showVideo = !reducedMotion && !videoFailed;
-
   // Promo marquee slides: blurred banner previews
   const marqueeMedia = bannersForPlacement(banners, 'hero').slice(0, 6).map(b => b.mediaUrl);
 
@@ -219,8 +233,17 @@ export const CountdownSectionImpl: React.FC = () => {
       <style>{IMPL_CSS}</style>
 
       {/* ---- Cinematic video background (z-0, behind everything) ---- */}
-      <div className="absolute inset-0 z-0">
-        {showVideo ? (
+      <div className="absolute inset-0 z-0 overflow-hidden bg-zinc-950">
+        {/* Base layer: always a real food image, so the section never looks empty
+            while the video buffers or if autoplay/decode fails. */}
+        <img
+          src={FALLBACK_IMAGE}
+          alt=""
+          loading="eager"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        {showVideo && (
           <video
             ref={videoRef}
             src={videoSrc}
@@ -230,16 +253,8 @@ export const CountdownSectionImpl: React.FC = () => {
             playsInline
             preload="auto"
             onError={() => setVideoFailed(true)}
-            className="w-full h-full"
+            className="absolute inset-0 w-full h-full"
             style={{ objectFit: 'cover' }}
-          />
-        ) : (
-          <img
-            src={FALLBACK_IMAGE}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
           />
         )}
         {/* Spec overlay gradient: rgba(0,0,0,.72) top → rgba(0,0,0,.55) bottom */}
