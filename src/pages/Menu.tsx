@@ -18,7 +18,7 @@ import { ZoneSelector } from '../components/ZoneSelector';
  */
 export const Menu: React.FC = () => {
   const { categories, menuItems, loading } = useSite();
-  const { selectedZone } = useZones();
+  const { selectedZone, selectedArea } = useZones();
   const { favorites } = useFavorites();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -96,7 +96,7 @@ export const Menu: React.FC = () => {
             </div>
             <div>
               <h2 className="font-black text-zinc-900 leading-tight">Entrega em Huambo</h2>
-              <p className="text-xs text-zinc-500">Selecione a sua zona para ver taxa e tempo</p>
+              <p className="text-xs text-zinc-500">Escolhe o teu bairro para ver taxa e tempo</p>
             </div>
           </div>
           <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
@@ -105,7 +105,7 @@ export const Menu: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3 self-center">
                 <span className="px-4 py-2 bg-secondary/10 border border-secondary/20 rounded-full text-sm font-bold text-zinc-900 flex items-center gap-2">
                   <MapPin size={14} className="text-primary" />
-                  {selectedZone.name}
+                  {selectedArea} · zona {selectedZone.name}
                 </span>
                 <span className="px-4 py-2 bg-zinc-100 rounded-full text-sm font-bold text-zinc-900 flex items-center gap-2">
                   Kz{selectedZone.fee}

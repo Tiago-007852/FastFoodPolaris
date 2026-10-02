@@ -1,0 +1,91 @@
+import type { Banner } from './types';
+
+/**
+ * Galeria de fotos que passam no carousel principal da homepage.
+ *
+ * É usada quando ainda não existem banners vindos do Firestore (site novo,
+ * regras por publicar ou offline) — assim o hero nunca fica com uma única
+ * imagem parada. São `Banner` normais, por isso assim que o admin criar,
+ * trocar ou remover banners no painel, o Firestore passa a mandar e esta
+ * galeria deixa de aparecer.
+ */
+export const DEFAULT_HERO_SLIDES: Banner[] = [
+  {
+    id: 'default-hero-1',
+    title: 'Polaris FastFood',
+    subtitle: 'O sabor que guia o teu apetite',
+    mediaUrl: '/images/hero/hero-burger.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Pedir Agora',
+    ctaLink: '/menu',
+    badge: '',
+    placement: 'hero',
+    order: 1,
+    active: true,
+  },
+  {
+    id: 'default-hero-2',
+    title: 'Smash Burger',
+    subtitle: 'Carne grelhada no momento, pão tostado e queijo derretido',
+    mediaUrl: '/images/hero/hero-burger-fries.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Pedir Agora',
+    ctaLink: '/menu',
+    badge: 'Promoção',
+    placement: 'hero',
+    order: 2,
+    active: true,
+  },
+  {
+    id: 'default-hero-3',
+    title: 'Cachorro-quente',
+    subtitle: 'Salsicha grelhada com o nosso molho especial e batata crocante',
+    mediaUrl: '/images/teasers/hot-dog.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Pedir Agora',
+    ctaLink: '/menu',
+    badge: 'Novidade',
+    placement: 'hero',
+    order: 3,
+    active: true,
+  },
+  {
+    id: 'default-hero-4',
+    title: 'Sanduíche da Casa',
+    subtitle: 'Carne fatiada, queijo derretido e salada fresca todos os dias',
+    mediaUrl: '/images/teasers/sanduiche-carne.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Pedir Agora',
+    ctaLink: '/menu',
+    badge: '',
+    placement: 'hero',
+    order: 4,
+    active: true,
+  },
+  {
+    id: 'default-hero-5',
+    title: 'Menu Completo',
+    subtitle: 'Do burger à sobremesa, tudo no mesmo pedido',
+    mediaUrl: '/images/hero/hero-doce.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Ver o Menu',
+    ctaLink: '/menu',
+    badge: 'Novidade',
+    placement: 'hero',
+    order: 5,
+    active: true,
+  },
+  {
+    id: 'default-hero-6',
+    title: 'Entregas em todo o Huambo',
+    subtitle: 'Recebe em casa em 15 a 40 minutos, consoante o teu bairro',
+    mediaUrl: '/images/hero/hero-sobremesa.jpg',
+    mediaType: 'image',
+    ctaLabel: 'Pedir Agora',
+    ctaLink: '/menu',
+    badge: 'Promoção',
+    placement: 'hero',
+    order: 6,
+    active: true,
+  },
+];

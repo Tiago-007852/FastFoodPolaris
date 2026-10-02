@@ -11,7 +11,12 @@ import { STORAGE_KEY } from './shared';
  * localStorage to prevent duplicate submissions.
  * (Logic moved verbatim from the old CountdownSection — do not change.)
  */
-export const NotificationModal: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
+export const NotificationModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  /** Fired after a successful submission so the social-proof counter can go up. */
+  onSubscribed?: () => void;
+}> = ({ open, onClose, onSubscribed }) => {
   const { settings } = useSite();
   const { showToast } = useToast();
 
@@ -71,6 +76,7 @@ export const NotificationModal: React.FC<{ open: boolean; onClose: () => void }>
     }
 
     showToast(`Obrigado ${name.trim().split(' ')[0]}! Vais ser notificado assim que as entregas estiverem disponíveis. 🎉`, 'success', 5000);
+    onSubscribed?.();
     onClose();
   };
 

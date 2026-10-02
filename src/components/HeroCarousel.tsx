@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSite } from '../SiteContext';
 import { Banner } from '../types';
 import { BadgeChip } from './BadgeChip';
+import { DEFAULT_HERO_SLIDES } from '../heroSlides';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 
 const AUTOPLAY_MS = 5000;
@@ -34,33 +35,45 @@ export const bannersForPlacement = (banners: Banner[], placement: 'hero' | 'grid
  * Each slide has an overlay gradient, headline, subtext and a "Pedir Agora" CTA.
  */
 export const HeroCarousel: React.FC = () => {
-  const { settings, banners, loading } = useSite();
+  const { settings, banners, bannersAvailable } = useSite();
   const reducedMotion = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
   const slides: Banner[] = useMemo(() => {
     const fromDb = bannersForPlacement(banners, 'hero');
+    // Banners do admin mandam: é ele que troca e remove as fotos do carousel
     if (fromDb.length > 0) return fromDb;
-    // Fallback slide built from site settings so the hero is never empty
-    return [
-      {
-        id: 'fallback-hero',
-        title: settings?.restaurantName || 'Polaris Fast-Food',
-        subtitle: settings?.slogan || 'Onde o apetite encontra direção.',
-        mediaUrl:
-          settings?.heroImage ||
-          'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        ctaLabel: 'Pedir Agora',
-        ctaLink: '/menu',
-        badge: '',
-        placement: 'hero',
-        order: 0,
-        active: true,
-      },
-    ];
-  }, [banners, settings]);
+
+    // Admin esvaziou o carousel de propósito → respeita e mostra só o slide de
+    // reserva com a imagem/frase das Definições do Site.
+    if (bannersAvailable) {
+      return [
+        {
+          id: 'fallback-hero',
+          title: settings?.restaurantName || 'Polaris Fast-Food',
+          subtitle: settings?.slogan || 'Onde o apetite encontra direção.',
+          mediaUrl:
+            settings?.heroImage ||
+            'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
+          mediaType: 'image' as const,
+          ctaLabel: 'Pedir Agora',
+          ctaLink: '/menu',
+          badge: '',
+          placement: 'hero' as const,
+          order: 0,
+          active: true,
+        },
+      ];
+    }
+
+    // Sem banners no Firestore (regras por publicar / site novo / offline):
+    // passa a galeria local com várias fotos a rodar.
+    const gallery = DEFAULT_HERO_SLIDES.map(s => ({ ...s }));
+    if (settings?.heroImage) gallery[0] = { ...gallery[0], mediaUrl: settings.heroImage };
+    return gallery;
+  }, [banners, bannersAvailable, settings]);
 
   // Keep the index valid when the slide list changes (e.g. banner deactivated)
   useEffect(() => {
@@ -76,6 +89,17 @@ export const HeroCarousel: React.FC = () => {
 
   const goTo = (i: number) => setIndex(((i % slides.length) + slides.length) % slides.length);
 
+  /* Swipe on touch devices — a galeria tem de passar com o dedo no telemóvel */
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || slides.length < 2) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 50) goTo(index + (delta < 0 ? 1 : -1));
+    touchStartX.current = null;
+  };
+
   const current = slides[Math.min(index, slides.length - 1)];
 
   return (
@@ -83,6 +107,8 @@ export const HeroCarousel: React.FC = () => {
       className="relative h-[85vh] min-h-[560px] flex items-center overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       aria-roledescription="carousel"
       aria-label="Destaques e promoções"
     >
@@ -227,12 +253,6 @@ export const HeroCarousel: React.FC = () => {
         </div>
       </div>
 
-      {/* Skeleton while Firestore connects for the first time */}
-      {loading && slides.length === 0 && (
-        <div className="absolute inset-0 z-30 bg-zinc-900 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-        </div>
-      )}
-    </section>
+      </section>
   );
 };

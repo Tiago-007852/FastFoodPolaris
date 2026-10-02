@@ -260,7 +260,7 @@ export const seedDatabase = async () => {
       {
         title: 'Novo Burger Polaris Duplo',
         subtitle: 'Duas carnes suculentas, queijo derretido e o nosso molho secreto. Experimenta a novidade que já chegou ao Huambo.',
-        mediaUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=2070&auto=format&fit=crop',
+        mediaUrl: '/images/hero/hero-burger.jpg',
         mediaType: 'image',
         ctaLabel: 'Pedir Agora',
         ctaLink: '/menu',
@@ -272,7 +272,7 @@ export const seedDatabase = async () => {
       {
         title: 'Combo Familiar',
         subtitle: '2 burgers + batatas gigantes + 4 bebidas por apenas Kz25.000. Perfeito para partilhar em casa.',
-        mediaUrl: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
+        mediaUrl: '/images/hero/hero-burger-fries.jpg',
         mediaType: 'image',
         ctaLabel: 'Pedir Agora',
         ctaLink: '/menu',
@@ -284,7 +284,7 @@ export const seedDatabase = async () => {
       {
         title: 'Entregamos em todo o Huambo',
         subtitle: 'Peça agora e receba em casa em 15 a 40 minutos, consoante a sua zona.',
-        mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+        mediaUrl: '/images/hero/hero-sobremesa.jpg',
         mediaType: 'video',
         ctaLabel: 'Pedir Agora',
         ctaLink: '/menu',

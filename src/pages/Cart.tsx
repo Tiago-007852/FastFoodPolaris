@@ -16,7 +16,7 @@ import { useToast } from '../components/ToastProvider';
 export const Cart: React.FC = () => {
   const { cart, total, removeFromCart, updateQuantity, clearCart } = useCart();
   const { settings } = useSite();
-  const { selectedZone } = useZones();
+  const { selectedZone, selectedArea } = useZones();
   const { showToast } = useToast();
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
@@ -34,7 +34,7 @@ export const Cart: React.FC = () => {
       return;
     }
     if (!selectedZone) {
-      showToast('Por favor, selecione a sua zona de entrega.', 'error');
+      showToast('Por favor, escolha o bairro onde quer receber o pedido.', 'error');
       return;
     }
 
@@ -46,7 +46,8 @@ export const Cart: React.FC = () => {
     const message = `*Novo Pedido - Polaris Fast-Food*\n\n` +
       `*Cliente:* ${name.trim()}\n` +
       `*Tipo:* Entrega ao Domicílio 🛵\n` +
-      `*Zona de Entrega:* ${selectedZone.name}\n` +
+      `*Bairro de Entrega:* ${selectedArea}\n` +
+      `*Zona:* ${selectedZone.name}\n` +
       `*Endereço Completo:* ${address.trim()}\n` +
       `*Tempo Estimado:* ${formatEta(selectedZone)}\n\n` +
       `*Itens:*\n${orderItems}\n\n` +
@@ -166,7 +167,7 @@ export const Cart: React.FC = () => {
 
             {/* Delivery Zone (Feature 3) */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Zona de Entrega</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Onde entregas em Huambo?</h3>
               <ZoneSelector variant="cards" />
             </div>
 
@@ -202,7 +203,7 @@ export const Cart: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-zinc-600">
-                  <span>Taxa de Entrega {selectedZone ? `(${selectedZone.name})` : ''}</span>
+                  <span>Taxa de Entrega {selectedZone ? `(${selectedArea} · zona ${selectedZone.name})` : ''}</span>
                   <span className="font-bold">Kz{deliveryFee.toFixed(2)}</span>
                 </div>
                 {selectedZone && (

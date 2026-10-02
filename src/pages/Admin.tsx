@@ -723,6 +723,11 @@ export const Admin: React.FC = () => {
               <div>
                 <h3 className="text-2xl font-black text-zinc-900">Banners</h3>
                 <p className="text-sm text-zinc-500">Imagens e vídeos do carousel principal e da grelha "Novidades & Promoções".</p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Estes banners passam a rodar no carousel assim que existirem. Para <strong>trocar</strong> uma foto, edita o
+                  banner e faz upload da nova imagem; para <strong>remover</strong>, apaga o banner (ou desliga o botão ativo /
+                  a data "Ativo Até"). Enquanto esta lista estiver vazia, a galeria de fotos incluída no site é que aparece.
+                </p>
               </div>
               <button onClick={() => { setEditingItem({}); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center space-x-2">
                 <Plus size={20} />

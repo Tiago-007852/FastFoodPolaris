@@ -8,7 +8,16 @@ import { db } from '../../firebase';
 import { useToast } from '../ToastProvider';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { bannersForPlacement } from '../HeroCarousel';
-import { DEFAULT_TARGET, buildTeasers, type CountdownValues } from './shared';
+import {
+  BASE_SUBSCRIBERS,
+  DEFAULT_TARGET,
+  buildTeasers,
+  bumpLocalSubscriberBoost,
+  canCreditSubscriber,
+  getLocalSubscriberBoost,
+  markSubscriberCredited,
+  type CountdownValues,
+} from './shared';
 import { FireBurnStyle } from './FireBurnStyle';
 import { LiquidFillStyle } from './LiquidFillStyle';
 import { CircleProgressStyle } from './CircleProgressStyle';
@@ -54,8 +63,8 @@ const STYLE_NAMES = ['🔥 Fire Burn', '💧 Liquid Fill', '⭕ Circle Progress'
 
 const FEATURES = [
   { icon: '🛵', label: 'Entregas Rápidas' },
-  { icon: '📍', label: '6 Zonas do Huambo' },
-  { icon: '💳', label: 'Pagamento na Entrega' },
+  { icon: '📍', label: 'Entregas na tua zona' },
+  { icon: '💳', label: 'Pagamentos seguros' },
   { icon: '⭐', label: 'Avalia os teus pratos' },
   { icon: '❤️', label: 'Guarda os teus favoritos' },
 ];
@@ -78,6 +87,7 @@ export const CountdownSectionImpl: React.FC = () => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [subscriberCount, setSubscriberCount] = useState(0);
+  const [localBoost, setLocalBoost] = useState(() => getLocalSubscriberBoost());
   const [countPulse, setCountPulse] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -110,12 +120,27 @@ export const CountdownSectionImpl: React.FC = () => {
         }
       },
       (error) => {
-        // Collection may not exist yet / rules — counter simply stays 0
+        // Collection may not exist yet / rules — the local counter keeps working
         console.error('notificationSubscribers listener:', error);
       },
     );
     return () => unsub();
   }, []);
+
+  /**
+   * Social proof: starts at the baseline and always goes up when someone asks
+   * to be notified (once per visit, mirrored locally because anonymous
+   * visitors cannot write to Firestore).
+   */
+  const totalSubscribers = BASE_SUBSCRIBERS + Math.max(subscriberCount, localBoost);
+
+  const creditSubscriber = () => {
+    if (!canCreditSubscriber()) return;
+    markSubscriberCredited();
+    setLocalBoost(bumpLocalSubscriberBoost());
+    setCountPulse(true);
+    window.setTimeout(() => setCountPulse(false), 450);
+  };
 
   // ---- Countdown target (admin-configurable) ----
   const targetIso = settings?.countdownTargetDate || DEFAULT_TARGET;
@@ -423,14 +448,17 @@ export const CountdownSectionImpl: React.FC = () => {
           <span
             className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-black/45 backdrop-blur border border-white/10 text-white/85 text-sm font-bold ${countPulse ? 'counter-pulse' : ''}`}
           >
-            🔔 <span className="tabular-nums">{subscriberCount}</span> pessoas já querem ser notificadas
+            🔔 <span className="tabular-nums">{totalSubscribers}</span> pessoas já querem ser notificadas
           </span>
         </div>
 
         {/* CTA */}
         <div className="flex justify-center mb-20">
           <button
-            onClick={() => setNotifyOpen(true)}
+            onClick={() => {
+              creditSubscriber();
+              setNotifyOpen(true);
+            }}
             className="px-10 py-5 bg-primary hover:bg-primary-hover text-white rounded-full font-black text-lg transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 hover:scale-[1.02] active:scale-[0.98]"
           >
             <BellRing size={22} />
@@ -486,7 +514,7 @@ export const CountdownSectionImpl: React.FC = () => {
       </div>
 
       {/* ---- "Quero ser Notificado" WhatsApp modal (flow unchanged) ---- */}
-      <NotificationModal open={notifyOpen} onClose={() => setNotifyOpen(false)} />
+      <NotificationModal open={notifyOpen} onClose={() => setNotifyOpen(false)} onSubscribed={creditSubscriber} />
     </section>
   );
 };

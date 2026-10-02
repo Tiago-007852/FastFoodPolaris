@@ -17,6 +17,8 @@ interface SiteContextType {
   banners: Banner[];
   /** Per-dish ratings submitted by customers (Feature 4) */
   dishRatings: DishRating[];
+  /** False when the banners listener failed (rules/offline) — the UI then uses local defaults */
+  bannersAvailable: boolean;
   loading: boolean;
 }
 
@@ -32,6 +34,7 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [about, setAbout] = useState<AboutContent | null>(null);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [dishRatings, setDishRatings] = useState<DishRating[]>([]);
+  const [bannersAvailable, setBannersAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,7 +87,9 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubBanners = onSnapshot(query(collection(db, 'banners'), orderBy('order')), (snapshot) => {
       setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)));
+      setBannersAvailable(true);
     }, (error) => {
+      setBannersAvailable(false);
       handleFirestoreError(error, OperationType.GET, 'banners', false);
     });
 
@@ -108,7 +113,7 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <SiteContext.Provider value={{ categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, loading }}>
+    <SiteContext.Provider value={{ categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, bannersAvailable, loading }}>
       {children}
     </SiteContext.Provider>
   );

@@ -7,6 +7,56 @@ export const DEFAULT_TARGET = '2026-10-05T00:00:00+01:00';
 export const STORAGE_KEY = 'polaris_notify_submitted';
 
 /**
+ * Social-proof baseline: people who already showed interest before the live
+ * counter existed. The counter shows this until Firestore reports real data.
+ */
+export const BASE_SUBSCRIBERS = 17;
+
+/** localStorage key for signups credited on this device (Firestore writes are
+ *  denied for anonymous visitors, so we keep a local boost as a fallback). */
+export const LOCAL_COUNT_KEY = 'polaris_notify_local_count';
+/** sessionStorage key so one visit never inflates the number repeatedly. */
+export const SESSION_CREDITED_KEY = 'polaris_notify_counted';
+
+/** Signups credited on this device. */
+export const getLocalSubscriberBoost = (): number => {
+  try {
+    return Math.max(0, Number(localStorage.getItem(LOCAL_COUNT_KEY)) || 0);
+  } catch {
+    return 0;
+  }
+};
+
+/** Credits one signup on this device and returns the new local total. */
+export const bumpLocalSubscriberBoost = (): number => {
+  const next = getLocalSubscriberBoost() + 1;
+  try {
+    localStorage.setItem(LOCAL_COUNT_KEY, String(next));
+  } catch {
+    // localStorage unavailable — the number still bumps for this session
+  }
+  return next;
+};
+
+/** True when this visit has not credited the counter yet. */
+export const canCreditSubscriber = (): boolean => {
+  try {
+    return sessionStorage.getItem(SESSION_CREDITED_KEY) !== '1';
+  } catch {
+    return true;
+  }
+};
+
+/** Marks this visit as credited. */
+export const markSubscriberCredited = () => {
+  try {
+    sessionStorage.setItem(SESSION_CREDITED_KEY, '1');
+  } catch {
+    // ignore
+  }
+};
+
+/**
  * Fallback teaser dishes when there are not enough "Novidade" dishes in the
  * menu. Real food photography (local, so it always loads) instead of emoji.
  * Pizza and milkshake were intentionally dropped.
