@@ -38,13 +38,13 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubCategories = onSnapshot(query(collection(db, 'categories'), orderBy('order')), (snapshot) => {
       setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'categories');
+      handleFirestoreError(error, OperationType.GET, 'categories', false);
     });
 
     const unsubMenuItems = onSnapshot(collection(db, 'menuItems'), (snapshot) => {
       setMenuItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'menuItems');
+      handleFirestoreError(error, OperationType.GET, 'menuItems', false);
     });
 
     const unsubSettings = onSnapshot(doc(db, 'siteSettings', 'main'), (doc) => {
@@ -52,25 +52,25 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSettings(doc.data() as SiteSettings);
       }
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'siteSettings/main');
+      handleFirestoreError(error, OperationType.GET, 'siteSettings/main', false);
     });
 
     const unsubReviews = onSnapshot(query(collection(db, 'reviews'), orderBy('date', 'desc')), (snapshot) => {
       setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'reviews');
+      handleFirestoreError(error, OperationType.GET, 'reviews', false);
     });
 
     const unsubGallery = onSnapshot(query(collection(db, 'gallery'), orderBy('order')), (snapshot) => {
       setGallery(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GalleryImage)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'gallery');
+      handleFirestoreError(error, OperationType.GET, 'gallery', false);
     });
 
     const unsubTeam = onSnapshot(query(collection(db, 'team'), orderBy('order')), (snapshot) => {
       setTeam(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamMember)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'team');
+      handleFirestoreError(error, OperationType.GET, 'team', false);
     });
 
     const unsubAbout = onSnapshot(doc(db, 'siteSettings', 'about'), (doc) => {
@@ -79,19 +79,19 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'siteSettings/about');
+      handleFirestoreError(error, OperationType.GET, 'siteSettings/about', false);
     });
 
     const unsubBanners = onSnapshot(query(collection(db, 'banners'), orderBy('order')), (snapshot) => {
       setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'banners');
+      handleFirestoreError(error, OperationType.GET, 'banners', false);
     });
 
     const unsubDishRatings = onSnapshot(query(collection(db, 'dishRatings'), orderBy('date', 'desc')), (snapshot) => {
       setDishRatings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DishRating)));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'dishRatings');
+      handleFirestoreError(error, OperationType.GET, 'dishRatings', false);
     });
 
     return () => {

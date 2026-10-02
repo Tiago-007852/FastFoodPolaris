@@ -54,7 +54,7 @@ export const ZonesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (fetched.length > 0) setZones(fetched);
       // Empty collection keeps the hardcoded defaults above
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'deliveryZones');
+      handleFirestoreError(error, OperationType.GET, 'deliveryZones', false);
     });
     return () => unsub();
   }, []);

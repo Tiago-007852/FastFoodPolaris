@@ -28,7 +28,18 @@ interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+/**
+ * Logs a Firestore error with rich auth context.
+ * `rethrow` should be false for reactive listeners (onSnapshot): throwing there
+ * escapes as an uncaught exception instead of surfacing to the caller, which
+ * crashes the app rather than degrading gracefully.
+ */
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null,
+  rethrow: boolean = true,
+) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -48,5 +59,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  if (rethrow) throw new Error(JSON.stringify(errInfo));
 }

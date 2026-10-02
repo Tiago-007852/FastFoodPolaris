@@ -333,10 +333,17 @@ export const CountdownSectionImpl: React.FC = () => {
             }}
             onPause={() => setVideoPlaying(false)}
             onPlay={() => setVideoPlaying(true)}
-            className="countdown-video absolute inset-x-0 top-0 w-full"
+            onLoadedData={() => console.info('[countdown] video data ready', videoSrc)}
+            /* Inline styles (not a stylesheet rule) so the video can never end up
+               with zero height if the component stylesheet is ever missing. */
+            className="absolute inset-x-0 top-0 w-full"
             style={{
               objectFit: 'cover',
               transform: 'translateZ(0)',
+              height: isMobile ? '70svh' : '100%',
+              // Fade the band into the gradient below on mobile only
+              maskImage: isMobile ? 'linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%)' : undefined,
+              WebkitMaskImage: isMobile ? 'linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%)' : undefined,
             }}
           />
         )}

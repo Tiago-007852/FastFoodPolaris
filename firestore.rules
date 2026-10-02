@@ -146,6 +146,33 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Hero carousel / promotions banners
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Huambo delivery zones
+    match /deliveryZones/{zoneId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Per-dish ratings
+    match /dishRatings/{ratingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                      hasRequiredFields(['dishId', 'userName', 'rating', 'date']) &&
+                      isValidRating(request.resource.data.rating);
+      allow update, delete: if isAdmin();
+    }
+
+    // Launch notification subscribers (public counter)
+    match /notificationSubscribers/{subscriberId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /users/{userId} {
       // Allow users to read their own profile, and admins to read all
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
