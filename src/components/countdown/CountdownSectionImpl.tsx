@@ -124,7 +124,12 @@ export const CountdownSectionImpl: React.FC = () => {
 
   // Custom video URL from Firestore (admin-configurable, not in SiteSettings type yet)
   const videoSrc: string = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
-  const showVideo = !reducedMotion && !videoFailed;
+  /* The video element is always rendered unless it actually failed to load.
+     Reduced motion only disables AUTOPLAY (the manual play button still lets
+     the visitor start it) — gating the element itself made the section show a
+     bare gradient with no video and no control to start it. */
+  const showVideo = !videoFailed;
+  const autoplayEnabled = !reducedMotion;
 
   // ---- Video: force playback robustly (React needs muted set as a property) ----
   useEffect(() => {
@@ -135,6 +140,11 @@ export const CountdownSectionImpl: React.FC = () => {
     // Muted must be set as a DOM property for the autoplay policy to accept it
     v.muted = true;
     v.defaultMuted = true;
+
+    if (!autoplayEnabled) {
+      setVideoPlaying(false); // reduced motion: paused on purpose, play button shows
+      return;
+    }
 
     let attempts = 0;
     const tryPlay = () => {
@@ -157,7 +167,7 @@ export const CountdownSectionImpl: React.FC = () => {
       ['loadeddata', 'canplay', 'playing'].forEach(evt => v.removeEventListener(evt, tryPlay));
       document.removeEventListener('visibilitychange', tryPlay);
     };
-  }, [showVideo, videoSrc]);
+  }, [showVideo, autoplayEnabled, videoSrc]);
 
   // ---- Video: pause while the section is off-screen (saves CPU/battery) ----
   useEffect(() => {
@@ -310,13 +320,17 @@ export const CountdownSectionImpl: React.FC = () => {
           <video
             ref={videoRef}
             src={videoSrc}
-            autoPlay
+            autoPlay={autoplayEnabled}
             muted
             loop
             playsInline
             /* Mobile gets a lighter preload: 60fps @720p is heavy to fetch up front. */
             preload={isMobile ? 'metadata' : 'auto'}
-            onError={() => setVideoFailed(true)}
+            onError={e => {
+              const err = (e.currentTarget as HTMLVideoElement).error;
+              console.error('[countdown] video failed to load', videoSrc, err?.code, err?.message);
+              setVideoFailed(true);
+            }}
             onPause={() => setVideoPlaying(false)}
             onPlay={() => setVideoPlaying(true)}
             className="countdown-video absolute inset-x-0 top-0 w-full"
