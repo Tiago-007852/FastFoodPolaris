@@ -4,7 +4,7 @@ import { collection, doc, setDoc, addDoc, getDocs, deleteDoc } from 'firebase/fi
 export const seedDatabase = async () => {
   try {
     // 0. Clear existing data (optional but recommended for a clean seed)
-    const collectionsToClear = ['categories', 'menuItems', 'reviews', 'gallery', 'team'];
+    const collectionsToClear = ['categories', 'menuItems', 'reviews', 'gallery', 'team', 'banners', 'deliveryZones', 'dishRatings'];
     for (const coll of collectionsToClear) {
       const snapshot = await getDocs(collection(db, coll));
       for (const docSnap of snapshot.docs) {
@@ -24,7 +24,10 @@ export const seedDatabase = async () => {
       openingHours: 'Seg - Dom: 11:00 - 23:00',
       deliveryFee: 1000.00,
       heroImage: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
-      googleMapsUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3923.456789012345!2d15.73456789012345!3d-12.712345678901234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTLCsDQyJzQ0LjQiUyAxNcKwNDQnMDQuNCJF!5e0!3m2!1spt-PT!2sao!4v1234567890123'
+      googleMapsUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3923.456789012345!2d15.73456789012345!3d-12.712345678901234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTLCsDQyJzQ0LjQiUyAxNcKwNDQnMDQuNCJF!5e0!3m2!1spt-PT!2sao!4v1234567890123',
+      // Launch countdown (Feature 6) — October 5th, 2026 at 00:00 Angola time (UTC+1)
+      countdownEnabled: true,
+      countdownTargetDate: '2026-10-05T00:00:00+01:00'
     });
 
     // 2. Categories
@@ -251,6 +254,89 @@ export const seedDatabase = async () => {
       quote: '"Onde o apetite encontra direção."',
       quoteAuthor: 'Polaris Team'
     });
+
+    // 8. Hero carousel + promotions grid banners (Feature 1)
+    const banners = [
+      {
+        title: 'Novo Burger Polaris Duplo',
+        subtitle: 'Duas carnes suculentas, queijo derretido e o nosso molho secreto. Experimenta a novidade que já chegou ao Huambo.',
+        mediaUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=2070&auto=format&fit=crop',
+        mediaType: 'image',
+        ctaLabel: 'Pedir Agora',
+        ctaLink: '/menu',
+        badge: 'Novidade',
+        placement: 'hero',
+        order: 1,
+        active: true
+      },
+      {
+        title: 'Combo Familiar',
+        subtitle: '2 burgers + batatas gigantes + 4 bebidas por apenas Kz25.000. Perfeito para partilhar em casa.',
+        mediaUrl: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
+        mediaType: 'image',
+        ctaLabel: 'Pedir Agora',
+        ctaLink: '/menu',
+        badge: 'Promoção',
+        placement: 'both',
+        order: 2,
+        active: true
+      },
+      {
+        title: 'Entregamos em todo o Huambo',
+        subtitle: 'Peça agora e receba em casa em 15 a 40 minutos, consoante a sua zona.',
+        mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+        mediaType: 'video',
+        ctaLabel: 'Pedir Agora',
+        ctaLink: '/menu',
+        badge: '',
+        placement: 'hero',
+        order: 3,
+        active: true
+      },
+      {
+        title: 'Sexta do Milkshake',
+        subtitle: 'Nas sextas-feiras, todo o sexto milkshake é por nossa conta. Não fiques de fora!',
+        mediaUrl: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=1974&auto=format&fit=crop',
+        mediaType: 'image',
+        ctaLabel: '',
+        ctaLink: '/menu',
+        badge: 'Promoção',
+        placement: 'grid',
+        order: 4,
+        active: true
+      },
+      {
+        title: 'Bastidores da Cozinha',
+        subtitle: 'Vê como preparamos os teus pratos favoritos, do grelho à tua mesa.',
+        mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+        mediaType: 'video',
+        ctaLabel: '',
+        ctaLink: '/menu',
+        badge: 'Evento',
+        placement: 'grid',
+        order: 5,
+        active: true
+      }
+    ];
+
+    for (const banner of banners) {
+      await addDoc(collection(db, 'banners'), banner);
+    }
+
+    // 9. Huambo delivery zones (Feature 3) — deterministic ids so re-seeding is idempotent
+    const zones = [
+      { id: 'zona-centro', name: 'Centro', neighborhoods: ['Cidade Alta', 'Mercado Central', 'Vila Teixeira'], fee: 300, timeMin: 15, timeMax: 25, order: 1, enabled: true },
+      { id: 'zona-norte', name: 'Norte', neighborhoods: ['Tchavola', 'Calima', 'Luvemba'], fee: 500, timeMin: 25, timeMax: 35, order: 2, enabled: true },
+      { id: 'zona-sul', name: 'Sul', neighborhoods: ['Caála', 'São João', 'Água Fria'], fee: 600, timeMin: 30, timeMax: 40, order: 3, enabled: true },
+      { id: 'zona-leste', name: 'Leste', neighborhoods: ['Casseque', 'Bela Vista', 'Lounalui'], fee: 500, timeMin: 25, timeMax: 35, order: 4, enabled: true },
+      { id: 'zona-oeste', name: 'Oeste', neighborhoods: ['Kamussamba', 'Lalula', 'São Pedro'], fee: 550, timeMin: 30, timeMax: 40, order: 5, enabled: true },
+      { id: 'zona-universitaria', name: 'Zona Universitária', neighborhoods: ['UJES', 'ISPUNIV', 'ISCED'], fee: 400, timeMin: 20, timeMax: 30, order: 6, enabled: true },
+    ];
+
+    for (const zone of zones) {
+      const { id, ...zoneData } = zone;
+      await setDoc(doc(db, 'deliveryZones', id), zoneData);
+    }
 
     console.log('Database seeded successfully!');
   } catch (error) {

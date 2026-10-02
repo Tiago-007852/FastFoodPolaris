@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
 import { CartProvider } from './CartContext';
 import { SiteProvider } from './SiteContext';
+import { ZonesProvider } from './ZonesContext';
+import { FavoritesProvider } from './FavoritesContext';
+import { ToastProvider } from './components/ToastProvider';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -22,26 +25,33 @@ export default function App() {
     <Router>
       <AuthProvider>
         <SiteProvider>
-          <CartProvider>
-            <ErrorBoundary>
-              <div className="min-h-screen bg-zinc-50 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
-                <Navbar />
-                <main className="flex-grow pt-20">
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/menu" element={<Menu />} />
-                    <Route path="/carrinho" element={<Cart />} />
-                    <Route path="/contacto" element={<Contact />} />
-                    <Route path="/sobre" element={<About />} />
-                    <Route path="/galeria" element={<Gallery />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/login" element={<Login />} />
-                  </Routes>
-                </main>
-                <Footer />
-              </div>
-            </ErrorBoundary>
-          </CartProvider>
+          <ZonesProvider>
+            <CartProvider>
+              <FavoritesProvider>
+                <ToastProvider>
+                  <ErrorBoundary>
+                    {/* pt-28 accounts for the fixed header + persistent delivery banner (Feature 2) */}
+                    <div className="min-h-screen bg-zinc-50 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
+                      <Navbar />
+                      <main className="flex-grow pt-28">
+                        <Routes>
+                          <Route path="/" element={<Home />} />
+                          <Route path="/menu" element={<Menu />} />
+                          <Route path="/carrinho" element={<Cart />} />
+                          <Route path="/contacto" element={<Contact />} />
+                          <Route path="/sobre" element={<About />} />
+                          <Route path="/galeria" element={<Gallery />} />
+                          <Route path="/admin" element={<Admin />} />
+                          <Route path="/login" element={<Login />} />
+                        </Routes>
+                      </main>
+                      <Footer />
+                    </div>
+                  </ErrorBoundary>
+                </ToastProvider>
+              </FavoritesProvider>
+            </CartProvider>
+          </ZonesProvider>
         </SiteProvider>
       </AuthProvider>
     </Router>

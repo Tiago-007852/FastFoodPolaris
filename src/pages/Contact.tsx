@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Phone, MessageCircle, Instagram, Clock, Navigation, Mail } from 'lucide-react';
 import { useSite } from '../SiteContext';
+import { QrCodeSection } from '../components/QrCodeSection';
 
 export const Contact: React.FC = () => {
   const { settings } = useSite();
@@ -148,6 +149,9 @@ export const Contact: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Feature 5 — Animated QR code (website URL, brand colours, download & share) */}
+      <QrCodeSection />
     </div>
   );
 };

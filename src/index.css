@@ -6,3 +6,81 @@
   --color-secondary: #facc15; /* yellow-400 */
   --color-secondary-hover: #eab308; /* yellow-500 */
 }
+
+/* ============================================================
+   New feature animations (respect prefers-reduced-motion below)
+   ============================================================ */
+
+/* Horizontal marquee used by the promo teaser carousel (Feature 6) */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+}
+.marquee-hover-pause:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+/* Soft pulsing glow around the animated QR code (Feature 5) */
+@keyframes qr-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.30), 0 0 22px rgba(220, 38, 38, 0.20);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(220, 38, 38, 0), 0 0 46px rgba(250, 204, 21, 0.30);
+  }
+}
+.animate-qr-glow {
+  animation: qr-glow 2.4s ease-in-out infinite;
+}
+
+/* Vertical scan line sweeping across the QR code (Feature 5) */
+@keyframes qr-scan {
+  0% { top: 4%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: 92%; opacity: 0; }
+}
+.animate-qr-scan {
+  animation: qr-scan 3.2s ease-in-out infinite;
+}
+
+/* Pulsing effect on blurred teaser banners (Feature 6) */
+@keyframes soft-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+.animate-soft-pulse {
+  animation: soft-pulse 3s ease-in-out infinite;
+}
+
+/* Flip-in animation for countdown digits (Feature 6) */
+@keyframes flip-in {
+  from { transform: rotateX(90deg); opacity: 0; }
+  to { transform: rotateX(0deg); opacity: 1; }
+}
+.animate-flip-in {
+  animation: flip-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Hide scrollbars on horizontal scrollers (category pills etc.) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Users who prefer reduced motion get no decorative animation */
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-qr-glow,
+  .animate-qr-scan,
+  .animate-soft-pulse,
+  .animate-flip-in {
+    animation: none;
+  }
+}

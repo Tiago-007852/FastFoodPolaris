@@ -28,6 +28,11 @@ export const Navbar: React.FC = () => {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-black/5 shadow-sm">
+      {/* Feature 2 — persistent delivery-only banner */}
+      <div className="h-8 bg-primary text-white flex items-center justify-center text-xs sm:text-sm font-bold px-4">
+        🛵 Fazemos entregas em todo o Huambo!
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
           {/* Logo */}

@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone } from 'lucide-react';
+import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone, MonitorPlay, MapPin, Power, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useSite } from '../SiteContext';
+import { useZones, DEFAULT_ZONES, formatEta } from '../ZonesContext';
 import { loginWithGoogle, db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../firestoreUtils';
-import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent } from '../types';
+import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating } from '../types';
 import { seedDatabase } from '../seed';
 import { ImageUpload } from '../components/ImageUpload';
 
 export const Admin: React.FC = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
-  const { categories, menuItems, settings, reviews, gallery, team, about, loading: siteLoading } = useSite();
-  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'reviews' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
+  const { categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, loading: siteLoading } = useSite();
+  const { zones } = useZones();
+  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
   const [users, setUsers] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,6 +25,7 @@ export const Admin: React.FC = () => {
   const [tempImage, setTempImage] = useState<string>('');
   const [tempImage2, setTempImage2] = useState<string>('');
   const [extras, setExtras] = useState<{ name: string; price: number }[]>([]);
+  const [sizes, setSizes] = useState<{ name: string; price: number }[]>([]);
 
   useEffect(() => {
     if (activeTab === 'users' && isAdmin) {
@@ -69,16 +72,22 @@ export const Admin: React.FC = () => {
     if (isModalOpen && editingItem) {
       if (activeTab === 'gallery') {
         setTempImage(editingItem.url || '');
+      } else if (activeTab === 'banners') {
+        setTempImage(editingItem.mediaUrl || '');
+      } else if (activeTab === 'zones') {
+        setTempImage('');
       } else if (activeTab === 'about' && editingItem.name) { // Team member
         setTempImage(editingItem.image || '');
       } else {
         setTempImage(editingItem.image || '');
       }
       setExtras(editingItem.extras || []);
+      setSizes(editingItem.sizes || []);
     } else if (!isModalOpen) {
       setTempImage('');
       setTempImage2('');
       setExtras([]);
+      setSizes([]);
     }
   }, [isModalOpen, editingItem, activeTab]);
 
@@ -153,6 +162,14 @@ export const Admin: React.FC = () => {
       if (updateData.deliveryFee) updateData.deliveryFee = Number(updateData.deliveryFee);
       if (tempImage && activeTab === 'settings') updateData.heroImage = tempImage;
 
+      // Countdown settings (Feature 6) — only in the settings tab (the contacts form shares this handler)
+      if (activeTab === 'settings') {
+        updateData.countdownEnabled = formData.get('countdownEnabled') === 'on';
+        const countdownRaw = formData.get('countdownTargetDate') as string;
+        // datetime-local is Angola local time (UTC+1) — convert to ISO
+        if (countdownRaw) updateData.countdownTargetDate = new Date(`${countdownRaw}:00+01:00`).toISOString();
+      }
+
       await updateDoc(settingsRef, updateData);
       setStatus({ type: 'success', message: 'Definições guardadas com sucesso!' });
     } catch (err) {
@@ -189,6 +206,8 @@ export const Admin: React.FC = () => {
     const formData = new FormData(e.currentTarget);
     
     const validExtras = extras.filter(e => e.name.trim() !== '');
+    const validSizes = sizes.filter(s => s.name.trim() !== '');
+    const prepTime = Number(formData.get('prepTimeMinutes')) || 0;
 
     const data = {
       name: formData.get('name') as string,
@@ -198,6 +217,13 @@ export const Admin: React.FC = () => {
       categoryId: formData.get('categoryId') as string,
       isPopular: formData.get('isPopular') === 'on',
       isPromo: formData.get('isPromo') === 'on',
+      isNew: formData.get('isNew') === 'on',
+      isAvailable: formData.get('isAvailable') === 'on',
+      prepTimeMinutes: prepTime > 0 ? prepTime : null,
+      ingredients: ((formData.get('ingredients') as string) || '').trim(),
+      allergens: ((formData.get('allergens') as string) || '').trim(),
+      nutritionInfo: ((formData.get('nutritionInfo') as string) || '').trim(),
+      sizes: validSizes,
       extras: validExtras
     };
 
@@ -301,6 +327,149 @@ export const Admin: React.FC = () => {
     }
   };
 
+  // ======================= Feature 1: Banner Manager =======================
+
+  const handleSaveBanner = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const data = {
+      title: formData.get('title') as string,
+      subtitle: ((formData.get('subtitle') as string) || '').trim(),
+      mediaUrl: tempImage,
+      mediaType: ((formData.get('mediaType') as string) || 'image') as 'image' | 'video',
+      ctaLabel: ((formData.get('ctaLabel') as string) || '').trim(),
+      ctaLink: ((formData.get('ctaLink') as string) || '/menu').trim(),
+      badge: ((formData.get('badge') as string) || '') as Banner['badge'],
+      placement: ((formData.get('placement') as string) || 'both') as Banner['placement'],
+      order: Number(formData.get('order')) || 0,
+      active: formData.get('active') === 'on',
+      activeFrom: ((formData.get('activeFrom') as string) || '').trim(),
+      activeTo: ((formData.get('activeTo') as string) || '').trim(),
+    };
+
+    if (!data.mediaUrl) {
+      setStatus({ type: 'error', message: 'Adicione a imagem ou vídeo do banner (URL ou upload).' });
+      return;
+    }
+
+    try {
+      if (editingItem?.id) {
+        await updateDoc(doc(db, 'banners', editingItem.id), data);
+      } else {
+        await addDoc(collection(db, 'banners'), data);
+      }
+      setIsModalOpen(false);
+      setEditingItem(null);
+      setStatus({ type: 'success', message: 'Banner guardado!' });
+    } catch (err) {
+      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'banners');
+      setStatus({ type: 'error', message: 'Erro ao guardar banner.' });
+    }
+  };
+
+  const handleToggleBannerActive = async (banner: Banner) => {
+    try {
+      await updateDoc(doc(db, 'banners', banner.id), { active: !banner.active });
+      setStatus({ type: 'success', message: banner.active ? 'Banner desativado!' : 'Banner ativado!' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `banners/${banner.id}`);
+      setStatus({ type: 'error', message: 'Erro ao atualizar banner.' });
+    }
+  };
+
+  // ======================= Feature 3: Zone Manager =======================
+
+  const handleSaveZone = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const data = {
+      name: formData.get('name') as string,
+      fee: Number(formData.get('fee')) || 0,
+      timeMin: Number(formData.get('timeMin')) || 0,
+      timeMax: Number(formData.get('timeMax')) || 0,
+      neighborhoods: ((formData.get('neighborhoods') as string) || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean),
+      order: Number(formData.get('order')) || 0,
+      enabled: formData.get('enabled') === 'on',
+    };
+
+    try {
+      if (editingItem?.id) {
+        // setDoc so default (non-persisted) zones can be edited in place
+        await setDoc(doc(db, 'deliveryZones', editingItem.id), data);
+      } else {
+        await addDoc(collection(db, 'deliveryZones'), data);
+      }
+      setIsModalOpen(false);
+      setEditingItem(null);
+      setStatus({ type: 'success', message: 'Zona guardada!' });
+    } catch (err) {
+      handleFirestoreError(err, editingItem?.id ? OperationType.UPDATE : OperationType.CREATE, 'deliveryZones');
+      setStatus({ type: 'error', message: 'Erro ao guardar zona.' });
+    }
+  };
+
+  /** Enable/disable a zone. Default zones (not yet in Firestore) are persisted on first toggle. */
+  const handleToggleZoneEnabled = async (zone: DeliveryZone) => {
+    try {
+      await updateDoc(doc(db, 'deliveryZones', zone.id), { enabled: !zone.enabled });
+      setStatus({ type: 'success', message: zone.enabled ? 'Zona desativada!' : 'Zona ativada!' });
+    } catch {
+      // Zone only exists as a client-side default — persist it now
+      try {
+        const { id, ...zoneData } = { ...zone, enabled: !zone.enabled };
+        await setDoc(doc(db, 'deliveryZones', id), zoneData);
+        setStatus({ type: 'success', message: zone.enabled ? 'Zona desativada!' : 'Zona ativada!' });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `deliveryZones/${zone.id}`);
+        setStatus({ type: 'error', message: 'Erro ao atualizar zona.' });
+      }
+    }
+  };
+
+  const handleRestoreDefaultZones = async () => {
+    if (!confirm('Restaurar as 6 zonas padrão de Huambo? Isto substitui as zonas atualmente configuradas.')) return;
+    try {
+      for (const zone of DEFAULT_ZONES) {
+        const { id, ...zoneData } = zone;
+        await setDoc(doc(db, 'deliveryZones', id), zoneData);
+      }
+      setStatus({ type: 'success', message: 'Zonas padrão restauradas!' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'deliveryZones');
+      setStatus({ type: 'error', message: 'Erro ao restaurar zonas.' });
+    }
+  };
+
+  // ======================= Feature 4: Dish availability toggle =======================
+
+  const handleToggleDishAvailability = async (item: MenuItem) => {
+    const newState = item.isAvailable === false; // currently sold out -> becomes available
+    try {
+      await updateDoc(doc(db, 'menuItems', item.id), { isAvailable: newState });
+      setStatus({ type: 'success', message: newState ? 'Prato marcado como disponível!' : 'Prato marcado como esgotado!' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `menuItems/${item.id}`);
+      setStatus({ type: 'error', message: 'Erro ao atualizar disponibilidade.' });
+    }
+  };
+
+  // ======================= Feature 4: Dish ratings moderation =======================
+
+  const handleToggleDishRatingHidden = async (rating: DishRating) => {
+    try {
+      await updateDoc(doc(db, 'dishRatings', rating.id), { isHidden: !rating.isHidden });
+      setStatus({ type: 'success', message: rating.isHidden ? 'Avaliação reactivada!' : 'Avaliação oculta!' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `dishRatings/${rating.id}`);
+      setStatus({ type: 'error', message: 'Erro ao atualizar avaliação.' });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-8">
@@ -344,9 +513,12 @@ export const Admin: React.FC = () => {
           { id: 'contacts', label: 'Contactos', icon: <Phone size={18} /> },
           { id: 'categories', label: 'Categorias', icon: <LayoutGrid size={18} /> },
           { id: 'menu', label: 'Menu', icon: <Utensils size={18} /> },
+          { id: 'banners', label: 'Banners', icon: <MonitorPlay size={18} /> },
+          { id: 'zones', label: 'Zonas', icon: <MapPin size={18} /> },
           { id: 'gallery', label: 'Galeria', icon: <ImageIcon size={18} /> },
           { id: 'about', label: 'Sobre Nós', icon: <Users size={18} /> },
           { id: 'reviews', label: 'Avaliações', icon: <Star size={18} /> },
+          { id: 'ratings', label: 'Notas de Pratos', icon: <Star size={18} /> },
           { id: 'users', label: 'Utilizadores', icon: <Users size={18} /> },
         ].map((tab) => (
           <button
@@ -401,6 +573,22 @@ export const Admin: React.FC = () => {
                 currentImage={tempImage} 
                 onUpload={setTempImage} 
               />
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Data do Lançamento (Countdown)</label>
+                <input
+                  name="countdownTargetDate"
+                  type="datetime-local"
+                  defaultValue={settings?.countdownTargetDate
+                    ? new Date(settings.countdownTargetDate).toLocaleString('sv-SE', { timeZone: 'Africa/Luanda' }).slice(0, 16).replace(' ', 'T')
+                    : '2026-10-05T00:00'}
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
+                />
+                <p className="text-[11px] text-zinc-400">Hora local de Angola (UTC+1). Após esta data, o site mostra o banner "Já estamos a entregar!".</p>
+              </div>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input type="checkbox" name="countdownEnabled" defaultChecked={settings?.countdownEnabled !== false} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                <span className="text-sm font-bold text-zinc-900">Mostrar contagem decrescente no site</span>
+              </label>
             </div>
             <div className="md:col-span-2 pt-6">
               <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all flex items-center justify-center space-x-3">
@@ -502,8 +690,20 @@ export const Admin: React.FC = () => {
                   <div className="p-4 flex-grow">
                     <h4 className="font-bold text-zinc-900">{item.name}</h4>
                     <p className="text-xs text-zinc-400">Kz{item.price.toFixed(2)}</p>
+                    {/* Feature 4: availability badge */}
+                    <span className={`inline-block mt-2 px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${item.isAvailable !== false ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      {item.isAvailable !== false ? 'Em Stock' : 'Esgotado'}
+                    </span>
                   </div>
                   <div className="p-4 border-t border-black/5 flex justify-end space-x-2">
+                    {/* Feature 4: quick availability toggle (in stock / out of stock) */}
+                    <button
+                      onClick={() => handleToggleDishAvailability(item)}
+                      title={item.isAvailable !== false ? 'Marcar como Esgotado' : 'Marcar como Disponível'}
+                      className={`p-2 transition-colors ${item.isAvailable !== false ? 'text-green-500 hover:text-zinc-400' : 'text-red-400 hover:text-green-500'}`}
+                    >
+                      {item.isAvailable !== false ? <Eye size={18} /> : <EyeOff size={18} />}
+                    </button>
                     <button onClick={() => { setEditingItem(item); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-primary transition-colors">
                       <Edit2 size={18} />
                     </button>
@@ -513,6 +713,173 @@ export const Admin: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'banners' && (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-black text-zinc-900">Banners</h3>
+                <p className="text-sm text-zinc-500">Imagens e vídeos do carousel principal e da grelha "Novidades & Promoções".</p>
+              </div>
+              <button onClick={() => { setEditingItem({}); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center space-x-2">
+                <Plus size={20} />
+                <span>Novo Banner</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {banners.map((banner) => (
+                <div key={banner.id} className={`bg-zinc-50 rounded-2xl overflow-hidden border border-black/5 flex flex-col ${banner.active === false ? 'opacity-60' : ''}`}>
+                  {banner.mediaType === 'video' ? (
+                    <video src={banner.mediaUrl} muted playsInline preload="metadata" className="h-40 w-full object-cover bg-black" />
+                  ) : (
+                    <img src={banner.mediaUrl} alt="" loading="lazy" className="h-40 w-full object-cover" />
+                  )}
+                  <div className="p-4 flex-grow space-y-2">
+                    <h4 className="font-bold text-zinc-900">{banner.title}</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 bg-zinc-200 text-zinc-600 text-[10px] font-black uppercase rounded-full">
+                        {banner.placement === 'both' ? 'Hero + Grelha' : banner.placement === 'hero' ? 'Hero' : 'Grelha'}
+                      </span>
+                      {banner.badge && (
+                        <span className="px-2 py-0.5 bg-secondary/20 text-yellow-700 text-[10px] font-black uppercase rounded-full">{banner.badge}</span>
+                      )}
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${banner.active === false ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                        {banner.active === false ? 'Inativo' : 'Ativo'}
+                      </span>
+                    </div>
+                    {(banner.activeFrom || banner.activeTo) && (
+                      <p className="text-[11px] text-zinc-400">Agenda: {banner.activeFrom || '...'} → {banner.activeTo || '...'}</p>
+                    )}
+                  </div>
+                  <div className="p-4 border-t border-black/5 flex justify-end space-x-2">
+                    <button
+                      onClick={() => handleToggleBannerActive(banner)}
+                      title={banner.active === false ? 'Ativar' : 'Desativar'}
+                      className={`p-2 transition-colors ${banner.active === false ? 'text-zinc-400 hover:text-green-500' : 'text-green-500 hover:text-zinc-400'}`}
+                    >
+                      <Power size={18} />
+                    </button>
+                    <button onClick={() => { setEditingItem(banner); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-primary transition-colors">
+                      <Edit2 size={18} />
+                    </button>
+                    <button onClick={() => handleDelete('banners', banner.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {banners.length === 0 && (
+                <div className="col-span-full text-center py-12 text-zinc-400">
+                  Nenhum banner. Clique em "Novo Banner" para adicionar o primeiro.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'zones' && (
+          <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-2xl font-black text-zinc-900">Zonas de Entrega — Huambo</h3>
+                <p className="text-sm text-zinc-500">Taxas, tempos estimados e bairros cobertos em cada zona.</p>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleRestoreDefaultZones}
+                  className="px-5 py-3 bg-zinc-100 text-zinc-600 rounded-xl font-bold flex items-center space-x-2 hover:bg-zinc-200 transition-all"
+                >
+                  <RotateCcw size={18} />
+                  <span>Restaurar Padrão</span>
+                </button>
+                <button onClick={() => { setEditingItem({}); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center space-x-2">
+                  <Plus size={20} />
+                  <span>Nova Zona</span>
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {zones.map((zone) => (
+                <div key={zone.id} className={`p-6 bg-zinc-50 rounded-2xl border border-black/5 space-y-3 ${zone.enabled === false ? 'opacity-60' : ''}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-zinc-900">{zone.name}</h4>
+                      <p className="text-xs text-zinc-400">Taxa Kz{zone.fee} • {formatEta(zone)}</p>
+                    </div>
+                    <button
+                      onClick={() => handleToggleZoneEnabled(zone)}
+                      title={zone.enabled === false ? 'Ativar zona' : 'Desativar zona'}
+                      className={`p-2 rounded-xl transition-colors ${zone.enabled === false ? 'text-zinc-300 hover:text-green-500' : 'text-green-500 hover:text-zinc-400'}`}
+                    >
+                      <Power size={18} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(zone.neighborhoods || []).map(n => (
+                      <span key={n} className="px-2.5 py-1 bg-white border border-black/5 rounded-full text-xs font-medium text-zinc-600">{n}</span>
+                    ))}
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button onClick={() => { setEditingItem(zone); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-primary transition-colors">
+                      <Edit2 size={18} />
+                    </button>
+                    <button onClick={() => handleDelete('deliveryZones', zone.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'ratings' && (
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-2xl font-black text-zinc-900">Notas de Pratos</h3>
+              <p className="text-sm text-zinc-500">Avaliações enviadas pelos clientes para cada prato. Oculte ou elimine avaliações impróprias.</p>
+            </div>
+            <div className="space-y-4">
+              {dishRatings.map((rating) => {
+                const dish = menuItems.find(i => i.id === rating.dishId);
+                return (
+                  <div key={rating.id} className={`p-6 bg-zinc-50 rounded-2xl border border-black/5 flex justify-between items-start gap-4 ${rating.isHidden ? 'opacity-50' : ''}`}>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-zinc-900">{dish?.name || 'Prato eliminado'}</span>
+                        {rating.isHidden && (
+                          <span className="px-2 py-0.5 bg-zinc-200 text-zinc-600 text-[10px] font-black uppercase rounded-full">Oculta</span>
+                        )}
+                      </div>
+                      <div className="flex text-secondary">
+                        {[...Array(5)].map((_, i) => <Star key={i} size={14} fill={i < (rating.rating || 0) ? 'currentColor' : 'none'} className={i < (rating.rating || 0) ? 'text-secondary' : 'text-zinc-300'} />)}
+                      </div>
+                      <p className="text-sm text-zinc-600 italic">"{rating.comment || '— Sem comentário —'}"</p>
+                      <p className="text-[10px] text-zinc-400">{rating.userName} • {rating.date ? new Date(rating.date).toLocaleDateString() : ''}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleToggleDishRatingHidden(rating)}
+                        title={rating.isHidden ? 'Mostrar avaliação' : 'Ocultar avaliação'}
+                        className="p-2 text-zinc-400 hover:text-primary transition-colors"
+                      >
+                        {rating.isHidden ? <Eye size={18} /> : <EyeOff size={18} />}
+                      </button>
+                      <button onClick={() => handleDelete('dishRatings', rating.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {dishRatings.length === 0 && (
+                <div className="text-center py-12 text-zinc-400">
+                  Nenhuma avaliação de pratos ainda.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -763,6 +1130,8 @@ export const Admin: React.FC = () => {
                     activeTab === 'categories' ? 'Categoria' : 
                     activeTab === 'gallery' ? 'Imagem' :
                     activeTab === 'about' ? 'Membro da Equipa' :
+                    activeTab === 'banners' ? 'Banner' :
+                    activeTab === 'zones' ? 'Zona de Entrega' :
                     'Prato'
                   }
                 </h3>
@@ -804,6 +1173,129 @@ export const Admin: React.FC = () => {
                     </div>
                     <ImageUpload label="Upload Imagem" currentImage={tempImage} onUpload={setTempImage} />
                   </div>
+                  <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all">Guardar</button>
+                </form>
+              ) : activeTab === 'banners' ? (
+                <form onSubmit={handleSaveBanner} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Título</label>
+                      <input name="title" defaultValue={editingItem?.title} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Subtítulo</label>
+                      <input name="subtitle" defaultValue={editingItem?.subtitle} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Tipo de Mídia</label>
+                      <select name="mediaType" defaultValue={editingItem?.mediaType || 'image'} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all">
+                        <option value="image">Imagem</option>
+                        <option value="video">Vídeo</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Onde Mostrar</label>
+                      <select name="placement" defaultValue={editingItem?.placement || 'both'} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all">
+                        <option value="hero">Carousel Principal</option>
+                        <option value="grid">Grelha Novidades</option>
+                        <option value="both">Ambos</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Badge</label>
+                      <select name="badge" defaultValue={editingItem?.badge || ''} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all">
+                        <option value="">Sem badge</option>
+                        <option value="Promoção">Promoção</option>
+                        <option value="Novidade">Novidade</option>
+                        <option value="Evento">Evento</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Mídia (URL de imagem, MP4 ou YouTube)</label>
+                      <input
+                        value={tempImage}
+                        onChange={(e) => setTempImage(e.target.value)}
+                        placeholder="https://..."
+                        required
+                        className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
+                      />
+                    </div>
+                    <ImageUpload label="Ou faça upload de uma imagem" currentImage={tempImage} onUpload={setTempImage} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Texto do Botão (CTA)</label>
+                      <input name="ctaLabel" defaultValue={editingItem?.ctaLabel} placeholder="Pedir Agora" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Link do Botão</label>
+                      <input name="ctaLink" defaultValue={editingItem?.ctaLink} placeholder="/menu" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ordem</label>
+                      <input name="order" type="number" defaultValue={editingItem?.order} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ativo Desde</label>
+                      <input name="activeFrom" type="date" defaultValue={editingItem?.activeFrom} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ativo Até</label>
+                      <input name="activeTo" type="date" defaultValue={editingItem?.activeTo} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                  </div>
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" name="active" defaultChecked={editingItem?.id ? editingItem?.active !== false : true} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                    <span className="text-sm font-bold text-zinc-900">Banner ativo</span>
+                  </label>
+                  <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all">Guardar</button>
+                </form>
+              ) : activeTab === 'zones' ? (
+                <form onSubmit={handleSaveZone} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Nome da Zona</label>
+                      <input name="name" defaultValue={editingItem?.name} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ordem</label>
+                      <input name="order" type="number" defaultValue={editingItem?.order} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Taxa de Entrega (Kz)</label>
+                      <input name="fee" type="number" min="0" defaultValue={editingItem?.fee} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Tempo Mín (min)</label>
+                        <input name="timeMin" type="number" min="0" defaultValue={editingItem?.timeMin} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Tempo Máx (min)</label>
+                        <input name="timeMax" type="number" min="0" defaultValue={editingItem?.timeMax} required className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Bairros (separados por vírgula)</label>
+                    <textarea
+                      name="neighborhoods"
+                      defaultValue={(editingItem?.neighborhoods || []).join(', ')}
+                      rows={2}
+                      placeholder="Cidade Alta, Mercado Central, Vila Teixeira"
+                      className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all resize-none"
+                    />
+                  </div>
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" name="enabled" defaultChecked={editingItem?.id ? editingItem?.enabled !== false : true} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                    <span className="text-sm font-bold text-zinc-900">Zona ativa (visível aos clientes)</span>
+                  </label>
                   <button type="submit" className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg hover:bg-primary-hover transition-all">Guardar</button>
                 </form>
               ) : activeTab === 'about' ? (
@@ -870,15 +1362,96 @@ export const Admin: React.FC = () => {
                       onUpload={setTempImage} 
                     />
                   </div>
-                  <div className="flex space-x-8">
+                  <div className="flex flex-wrap gap-x-8 gap-y-3">
                     <label className="flex items-center space-x-3 cursor-pointer">
                       <input type="checkbox" name="isPopular" defaultChecked={editingItem?.isPopular} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
-                      <span className="text-sm font-bold text-zinc-900">Popular</span>
+                      <span className="text-sm font-bold text-zinc-900">Mais Pedido</span>
                     </label>
                     <label className="flex items-center space-x-3 cursor-pointer">
                       <input type="checkbox" name="isPromo" defaultChecked={editingItem?.isPromo} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
                       <span className="text-sm font-bold text-zinc-900">Promoção</span>
                     </label>
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                      <input type="checkbox" name="isNew" defaultChecked={editingItem?.isNew} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                      <span className="text-sm font-bold text-zinc-900">Novidade</span>
+                    </label>
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                      <input type="checkbox" name="isAvailable" defaultChecked={editingItem?.id ? editingItem?.isAvailable !== false : true} className="w-5 h-5 rounded border-black/5 text-primary focus:ring-primary" />
+                      <span className="text-sm font-bold text-zinc-900">Em Stock (desmarque = Esgotado)</span>
+                    </label>
+                  </div>
+
+                  {/* Feature 4: dish details fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Tempo de Preparação (minutos)</label>
+                      <input name="prepTimeMinutes" type="number" min="0" defaultValue={editingItem?.prepTimeMinutes} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Informação Nutricional</label>
+                      <input name="nutritionInfo" defaultValue={editingItem?.nutritionInfo} placeholder="Ex: 550 kcal" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Ingredientes (separados por vírgula)</label>
+                      <input name="ingredients" defaultValue={editingItem?.ingredients} placeholder="Pão, Carne, Queijo, Alface" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Alérgenos</label>
+                      <input name="allergens" defaultValue={editingItem?.allergens} placeholder="Ex: Contém glúten, ovo e laticínios" className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                    </div>
+                  </div>
+
+                  {/* Feature 4: sizes/portions editor */}
+                  <div className="space-y-4 pt-4 border-t border-black/5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Tamanhos / Porções (Opcional)</label>
+                      <button
+                        type="button"
+                        onClick={() => setSizes([...sizes, { name: '', price: 0 }])}
+                        className="text-xs font-bold text-primary flex items-center space-x-1 hover:underline"
+                      >
+                        <Plus size={14} />
+                        <span>Adicionar Tamanho</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {sizes.map((size, index) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <input
+                            placeholder="Nome (ex: Grande)"
+                            value={size.name}
+                            onChange={(e) => {
+                              const newSizes = [...sizes];
+                              newSizes[index].name = e.target.value;
+                              setSizes(newSizes);
+                            }}
+                            className="flex-grow px-4 py-3 bg-zinc-50 border border-black/5 rounded-xl text-sm focus:outline-none focus:border-primary transition-all"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Preço total"
+                            value={size.price}
+                            onChange={(e) => {
+                              const newSizes = [...sizes];
+                              newSizes[index].price = Number(e.target.value);
+                              setSizes(newSizes);
+                            }}
+                            className="w-32 px-4 py-3 bg-zinc-50 border border-black/5 rounded-xl text-sm focus:outline-none focus:border-primary transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSizes(sizes.filter((_, i) => i !== index))}
+                            className="p-3 text-zinc-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ))}
+                      {sizes.length === 0 && (
+                        <p className="text-xs text-zinc-400 italic">Nenhum tamanho adicionado. O preço base é usado por omissão.</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-4 pt-4 border-t border-black/5">

@@ -1,0 +1,354 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BellRing, ChevronRight, ShoppingBag } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { collection, onSnapshot, query } from 'firebase/firestore';
+import confetti from 'canvas-confetti';
+import { useSite } from '../../SiteContext';
+import { db } from '../../firebase';
+import { useToast } from '../ToastProvider';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
+import { bannersForPlacement } from '../HeroCarousel';
+import { DEFAULT_TARGET, buildTeasers, type CountdownValues } from './shared';
+import { FireBurnStyle } from './FireBurnStyle';
+import { LiquidFillStyle } from './LiquidFillStyle';
+import { CircleProgressStyle } from './CircleProgressStyle';
+import { EmojiCascadeStyle } from './EmojiCascadeStyle';
+import { MorphingNumbersStyle } from './MorphingNumbersStyle';
+import { TeaserSection } from './TeaserSection';
+import { NotificationModal } from './NotificationModal';
+
+const DEFAULT_VIDEO = '/videos/countdown-bg.mp4';
+const FALLBACK_IMAGE = '/images/countdown-bg-fallback.jpg';
+
+const IMPL_CSS = `
+.countdown-overlay {
+  background: linear-gradient(180deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.55) 100%);
+}
+@keyframes counter-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.counter-pulse { animation: counter-pulse 0.45s ease-out; }
+`;
+
+/** The 5 rotating visual styles, indexed by hours remaining % 5. */
+const STYLE_COMPONENTS = [FireBurnStyle, LiquidFillStyle, CircleProgressStyle, EmojiCascadeStyle, MorphingNumbersStyle];
+const STYLE_NAMES = ['🔥 Fire Burn', '💧 Liquid Fill', '⭕ Circle Progress', '🎉 Emoji Cascade', '✨ Morphing Numbers'];
+
+const FEATURES = [
+  { icon: '🛵', label: 'Entregas Rápidas' },
+  { icon: '📍', label: '6 Zonas do Huambo' },
+  { icon: '💳', label: 'Pagamento na Entrega' },
+  { icon: '⭐', label: 'Avalia os teus pratos' },
+  { icon: '❤️', label: 'Guarda os teus favoritos' },
+];
+
+/**
+ * Feature 6 — Cinematic launch countdown.
+ * Full-bleed looping video background, 5 rotating visual styles that change
+ * automatically every hour (hours remaining % 5), blurred teaser dishes with
+ * preview modal, WhatsApp notify flow, live subscriber counter and confetti
+ * at zero.
+ */
+export const CountdownSectionImpl: React.FC = () => {
+  const { settings, menuItems, banners } = useSite();
+  const { showToast } = useToast();
+  const reducedMotion = usePrefersReducedMotion();
+
+  const [now, setNow] = useState(() => Date.now());
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [subscriberCount, setSubscriberCount] = useState(0);
+  const [countPulse, setCountPulse] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const confettiFiredRef = useRef(false);
+  const prevStyleRef = useRef<number | null>(null);
+
+  // ---- 1s tick ----
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // ---- Mobile detection (resize listener) ----
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // ---- Live notification counter: real-time count of notificationSubscribers ----
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'notificationSubscribers')),
+      (snapshot) => {
+        setSubscriberCount(snapshot.size);
+        if (snapshot.size > 0) {
+          setCountPulse(true);
+          window.setTimeout(() => setCountPulse(false), 450);
+        }
+      },
+      (error) => {
+        // Collection may not exist yet / rules — counter simply stays 0
+        console.error('notificationSubscribers listener:', error);
+      },
+    );
+    return () => unsub();
+  }, []);
+
+  // ---- Countdown target (admin-configurable) ----
+  const targetIso = settings?.countdownTargetDate || DEFAULT_TARGET;
+  const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
+  const enabled = settings?.countdownEnabled !== false; // master switch (default: on)
+
+  // ---- Video cleanup: pause + unload on unmount ----
+  useEffect(() => {
+    const v = videoRef.current;
+    return () => {
+      if (v) {
+        try {
+          v.pause();
+          v.removeAttribute('src');
+          v.load();
+        } catch {
+          /* noop */
+        }
+      }
+    };
+  }, []);
+
+  // ---- Countdown maths (computed before any early return) ----
+  const totalSecondsRemaining = Math.max(0, Math.floor((target - now) / 1000));
+  const styleIndex = Math.floor(totalSecondsRemaining / 3600) % 5;
+
+  // ---- Style-change toast (only after mount, when styleIndex actually changes) ----
+  useEffect(() => {
+    if (prevStyleRef.current === null) {
+      prevStyleRef.current = styleIndex;
+      return;
+    }
+    if (prevStyleRef.current !== styleIndex) {
+      prevStyleRef.current = styleIndex;
+      showToast('✨ O estilo da contagem mudou!', 'info', 3000);
+    }
+  }, [styleIndex, showToast]);
+
+  // ---- Confetti at zero: one 5s burst in brand colours, guarded by ref ----
+  useEffect(() => {
+    if (now < target || confettiFiredRef.current) return;
+    confettiFiredRef.current = true;
+    const colors = ['#E63946', '#FFD700', '#FFFFFF'];
+    const end = Date.now() + 5000;
+    const frame = () => {
+      confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0, y: 0.7 }, colors });
+      confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+  }, [now, target]);
+
+  // ---- Teaser dishes (hook before early returns): real "Novidade" dishes first ----
+  const teasers = useMemo(() => buildTeasers(menuItems), [menuItems]);
+
+  if (!enabled) return null;
+
+  // ---- After the launch date: transition to a delivery banner ----
+  if (now >= target) {
+    return (
+      <section id="lancamento" className="relative py-16 bg-primary overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+          <div className="space-y-3">
+            <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
+              🎉 Já estamos a entregar!
+            </h2>
+            <p className="text-white/85 text-lg max-w-xl">
+              Faz o teu pedido agora e recebe os teus pratos favoritos em casa.
+            </p>
+          </div>
+          <Link
+            to="/menu"
+            className="px-10 py-5 bg-white text-primary rounded-full font-black text-lg hover:bg-secondary hover:text-zinc-900 transition-all shadow-2xl shadow-black/20 flex items-center gap-3 shrink-0"
+          >
+            <ShoppingBag size={22} />
+            Pedir Agora
+            <ChevronRight size={20} />
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  const diff = Math.max(0, target - now);
+  const countdown: CountdownValues = {
+    days: Math.floor(diff / 86400000),
+    hours: Math.floor(diff / 3600000) % 24,
+    minutes: Math.floor(diff / 60000) % 60,
+    seconds: Math.floor(diff / 1000) % 60,
+    totalSecondsRemaining,
+  };
+
+  const StyleComponent = STYLE_COMPONENTS[styleIndex];
+  const styleName = STYLE_NAMES[styleIndex];
+
+  // Custom video URL from Firestore (admin-configurable, not in SiteSettings type yet)
+  const videoSrc = (settings as { countdownBgVideo?: string } | null)?.countdownBgVideo || DEFAULT_VIDEO;
+  const showVideo = !reducedMotion && !videoFailed;
+
+  // Promo marquee slides: blurred banner previews
+  const marqueeMedia = bannersForPlacement(banners, 'hero').slice(0, 6).map(b => b.mediaUrl);
+
+  return (
+    <section id="lancamento" className="relative overflow-hidden min-h-[640px] sm:min-h-[760px]">
+      <style>{IMPL_CSS}</style>
+
+      {/* ---- Cinematic video background (z-0, behind everything) ---- */}
+      <div className="absolute inset-0 z-0">
+        {showVideo ? (
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onError={() => setVideoFailed(true)}
+            className="w-full h-full"
+            style={{ objectFit: 'cover' }}
+          />
+        ) : (
+          <img
+            src={FALLBACK_IMAGE}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
+        )}
+        {/* Spec overlay gradient: rgba(0,0,0,.72) top → rgba(0,0,0,.55) bottom */}
+        <div className="countdown-overlay absolute inset-0" />
+        {/* Brand colour accents */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/25 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-secondary/15 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        {/* Headline */}
+        <div className="text-center space-y-6 mb-14">
+          <h2 className="text-4xl md:text-6xl font-black text-white tracking-tight">
+            🚀 As Entregas Chegam ao Huambo em...
+          </h2>
+          <p className="text-white/70 text-lg md:text-xl max-w-2xl mx-auto">
+            Prepara-te para receber os teus pratos favoritos em casa
+          </p>
+        </div>
+
+        {/* ---- Rotating style countdown with 600ms crossfade ---- */}
+        <div className="flex items-center justify-center min-h-[260px] mb-6">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={styleIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6, ease: 'easeInOut' }}
+              className="w-full flex justify-center"
+            >
+              <StyleComponent countdown={countdown} isMobile={isMobile} reduced={reducedMotion} />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* ---- Active style badge (fades when the style changes) ---- */}
+        <div className="flex justify-center mb-16">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={styleIndex}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.6 }}
+              className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/15 text-white/70 text-xs font-bold tracking-wide"
+            >
+              {styleName}
+            </motion.span>
+          </AnimatePresence>
+        </div>
+
+        {/* ---- Live notification counter ---- */}
+        <div className="flex justify-center mb-10">
+          <span
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-black/45 backdrop-blur border border-white/10 text-white/85 text-sm font-bold ${countPulse ? 'counter-pulse' : ''}`}
+          >
+            🔔 <span className="tabular-nums">{subscriberCount}</span> pessoas já querem ser notificadas
+          </span>
+        </div>
+
+        {/* CTA */}
+        <div className="flex justify-center mb-20">
+          <button
+            onClick={() => setNotifyOpen(true)}
+            className="px-10 py-5 bg-primary hover:bg-primary-hover text-white rounded-full font-black text-lg transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <BellRing size={22} />
+            Quero ser Notificado
+          </button>
+        </div>
+
+        {/* Blurred teaser cards with scroll reveal + preview modal */}
+        <TeaserSection teasers={teasers} />
+
+        {/* "O que está por vir" feature strip — staggered entrance + hover lift */}
+        <div className="mb-12">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-white/40 mb-6">
+            O que está por vir
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            {FEATURES.map((f, idx) => (
+              <motion.div
+                key={f.label}
+                initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-20px' }}
+                transition={{ delay: reducedMotion ? 0 : idx * 0.15, duration: 0.45, ease: 'easeOut' }}
+                className="flex items-center gap-2.5 px-5 py-3.5 rounded-2xl bg-black/40 backdrop-blur border border-white/10 text-white/85 text-sm font-bold transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/20 hover:border-primary/40 cursor-default"
+              >
+                <span className="text-xl">{f.icon}</span>
+                {f.label}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Promo teaser marquee — blurred, pulsing banner previews */}
+        {marqueeMedia.length > 0 && (
+          <div className="marquee-hover-pause overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+            <div className="flex gap-5 w-max animate-marquee">
+              {[...marqueeMedia, ...marqueeMedia].map((url, i) => (
+                <div
+                  key={i}
+                  className="relative w-52 h-32 rounded-2xl overflow-hidden border border-white/10 animate-soft-pulse shrink-0"
+                >
+                  <img src={url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover blur-[6px] scale-110" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="px-3 py-1 rounded-full bg-black/50 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest">
+                      Em Breve
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- "Quero ser Notificado" WhatsApp modal (flow unchanged) ---- */}
+      <NotificationModal open={notifyOpen} onClose={() => setNotifyOpen(false)} />
+    </section>
+  );
+};

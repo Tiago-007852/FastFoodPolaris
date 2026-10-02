@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onSnapshot, collection, query, orderBy, doc } from 'firebase/firestore';
 import { db } from './firebase';
-import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent } from './types';
+import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DishRating } from './types';
 import { handleFirestoreError, OperationType } from './firestoreUtils';
 
 interface SiteContextType {
@@ -13,6 +13,10 @@ interface SiteContextType {
   gallery: GalleryImage[];
   team: TeamMember[];
   about: AboutContent | null;
+  /** Hero carousel / promotions grid banners (Feature 1) */
+  banners: Banner[];
+  /** Per-dish ratings submitted by customers (Feature 4) */
+  dishRatings: DishRating[];
   loading: boolean;
 }
 
@@ -26,6 +30,8 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [about, setAbout] = useState<AboutContent | null>(null);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [dishRatings, setDishRatings] = useState<DishRating[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,6 +82,18 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
       handleFirestoreError(error, OperationType.GET, 'siteSettings/about');
     });
 
+    const unsubBanners = onSnapshot(query(collection(db, 'banners'), orderBy('order')), (snapshot) => {
+      setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Banner)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'banners');
+    });
+
+    const unsubDishRatings = onSnapshot(query(collection(db, 'dishRatings'), orderBy('date', 'desc')), (snapshot) => {
+      setDishRatings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DishRating)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'dishRatings');
+    });
+
     return () => {
       unsubCategories();
       unsubMenuItems();
@@ -84,11 +102,13 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubGallery();
       unsubTeam();
       unsubAbout();
+      unsubBanners();
+      unsubDishRatings();
     };
   }, []);
 
   return (
-    <SiteContext.Provider value={{ categories, menuItems, settings, reviews, gallery, team, about, loading }}>
+    <SiteContext.Provider value={{ categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, loading }}>
       {children}
     </SiteContext.Provider>
   );

@@ -1,27 +1,40 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, Truck, Store, MessageCircle, ChevronLeft, Utensils } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, MessageCircle, ChevronLeft, Utensils, MapPin, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../CartContext';
 import { useSite } from '../SiteContext';
+import { useZones, formatEta } from '../ZonesContext';
+import { ZoneSelector } from '../components/ZoneSelector';
+import { useToast } from '../components/ToastProvider';
 
+/**
+ * Delivery-only checkout (Features 2 & 3).
+ * Flow: Select Dish → Select Zone → Enter Address → Cart → Checkout on WhatsApp.
+ * Fee and estimated time are calculated from the selected Huambo delivery zone.
+ */
 export const Cart: React.FC = () => {
   const { cart, total, removeFromCart, updateQuantity, clearCart } = useCart();
   const { settings } = useSite();
-  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
+  const { selectedZone } = useZones();
+  const { showToast } = useToast();
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
 
-  const deliveryFee = deliveryType === 'delivery' ? (settings?.deliveryFee || 2.5) : 0;
+  const deliveryFee = selectedZone?.fee ?? settings?.deliveryFee ?? 0;
   const finalTotal = total + deliveryFee;
 
   const handleWhatsAppCheckout = () => {
-    if (!name) {
-      alert('Por favor, insira o seu nome.');
+    if (!name.trim()) {
+      showToast('Por favor, insira o seu nome.', 'error');
       return;
     }
-    if (deliveryType === 'delivery' && !address) {
-      alert('Por favor, insira o endereço de entrega.');
+    if (!address.trim()) {
+      showToast('Por favor, insira o endereço de entrega.', 'error');
+      return;
+    }
+    if (!selectedZone) {
+      showToast('Por favor, selecione a sua zona de entrega.', 'error');
       return;
     }
 
@@ -31,16 +44,18 @@ export const Cart: React.FC = () => {
     }).join('\n');
 
     const message = `*Novo Pedido - Polaris Fast-Food*\n\n` +
-      `*Cliente:* ${name}\n` +
-      `*Tipo:* ${deliveryType === 'delivery' ? 'Entrega em Casa' : 'Retirada no Local'}\n` +
-      `${deliveryType === 'delivery' ? `*Endereço:* ${address}\n` : ''}\n` +
+      `*Cliente:* ${name.trim()}\n` +
+      `*Tipo:* Entrega ao Domicílio 🛵\n` +
+      `*Zona de Entrega:* ${selectedZone.name}\n` +
+      `*Endereço Completo:* ${address.trim()}\n` +
+      `*Tempo Estimado:* ${formatEta(selectedZone)}\n\n` +
       `*Itens:*\n${orderItems}\n\n` +
       `*Subtotal:* Kz${total.toFixed(2)}\n` +
       `*Taxa de Entrega:* Kz${deliveryFee.toFixed(2)}\n` +
       `*Total:* Kz${finalTotal.toFixed(2)}\n\n` +
       `_Por favor, confirme o meu pedido!_`;
 
-    const whatsappUrl = `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '') || '244940250279'}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '') || '244923456789'}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
     clearCart();
   };
@@ -68,12 +83,16 @@ export const Cart: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="flex items-center space-x-4 mb-12">
+      <div className="flex items-center space-x-4 mb-4">
         <Link to="/menu" className="p-2 bg-white border border-black/5 rounded-xl text-zinc-600 hover:text-primary transition-all">
           <ChevronLeft size={24} />
         </Link>
         <h1 className="text-4xl font-black tracking-tight text-zinc-900">O Seu Pedido</h1>
       </div>
+      <p className="text-zinc-500 mb-12 flex items-center gap-2">
+        <MapPin size={16} className="text-primary" />
+        Entregamos em todo o Huambo — selecione a sua zona para calcular a taxa e o tempo de entrega.
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         {/* Cart Items */}
@@ -89,7 +108,7 @@ export const Cart: React.FC = () => {
                 className="bg-white p-6 rounded-[32px] shadow-xl shadow-black/5 border border-black/5 flex flex-col sm:flex-row items-center gap-6"
               >
                 {item.image ? (
-                  <img src={item.image} alt={item.name} className="w-32 h-32 rounded-2xl object-cover" />
+                  <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="w-32 h-32 rounded-2xl object-cover" />
                 ) : (
                   <div className="w-32 h-32 bg-zinc-100 rounded-2xl flex items-center justify-center text-zinc-400">
                     <Utensils size={32} />
@@ -114,7 +133,7 @@ export const Cart: React.FC = () => {
                   >
                     <Minus size={18} />
                   </button>
-                  <motion.span 
+                  <motion.span
                     key={item.quantity}
                     initial={{ scale: 1.2, color: '#F59E0B' }}
                     animate={{ scale: 1, color: '#18181b' }}
@@ -145,33 +164,10 @@ export const Cart: React.FC = () => {
           <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-black/5 border border-black/5 space-y-8">
             <h2 className="text-2xl font-black text-zinc-900">Finalizar Pedido</h2>
 
-            {/* Delivery Type */}
+            {/* Delivery Zone (Feature 3) */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Forma de Entrega</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setDeliveryType('delivery')}
-                  className={`flex flex-col items-center p-4 rounded-2xl border transition-all space-y-2 ${
-                    deliveryType === 'delivery'
-                    ? 'bg-secondary/10 border-secondary text-zinc-900 shadow-lg shadow-secondary/10'
-                    : 'bg-white border-black/5 text-zinc-600 hover:border-secondary/50'
-                  }`}
-                >
-                  <Truck size={24} />
-                  <span className="text-xs font-bold">Entrega</span>
-                </button>
-                <button
-                  onClick={() => setDeliveryType('pickup')}
-                  className={`flex flex-col items-center p-4 rounded-2xl border transition-all space-y-2 ${
-                    deliveryType === 'pickup'
-                    ? 'bg-secondary/10 border-secondary text-zinc-900 shadow-lg shadow-secondary/10'
-                    : 'bg-white border-black/5 text-zinc-600 hover:border-secondary/50'
-                  }`}
-                >
-                  <Store size={24} />
-                  <span className="text-xs font-bold">Retirada</span>
-                </button>
-              </div>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Zona de Entrega</h3>
+              <ZoneSelector variant="cards" />
             </div>
 
             {/* Form */}
@@ -186,18 +182,16 @@ export const Cart: React.FC = () => {
                   className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
                 />
               </div>
-              {deliveryType === 'delivery' && (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Endereço de Entrega</label>
-                  <textarea
-                    placeholder="Rua, Número, Bloco, etc."
-                    rows={3}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all resize-none"
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Endereço Completo</label>
+                <textarea
+                  placeholder="Bairro, Rua, Número, Casa/Apartamento, ponto de referência..."
+                  rows={3}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all resize-none"
+                />
+              </div>
             </div>
 
             {/* Summary */}
@@ -206,9 +200,20 @@ export const Cart: React.FC = () => {
                 <span>Subtotal</span>
                 <span className="font-bold">Kz{total.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-zinc-600">
-                <span>Taxa de {deliveryType === 'delivery' ? 'Entrega' : 'Serviço'}</span>
-                <span className="font-bold">Kz{deliveryFee.toFixed(2)}</span>
+              <div className="space-y-1">
+                <div className="flex justify-between text-zinc-600">
+                  <span>Taxa de Entrega {selectedZone ? `(${selectedZone.name})` : ''}</span>
+                  <span className="font-bold">Kz{deliveryFee.toFixed(2)}</span>
+                </div>
+                {selectedZone && (
+                  <div className="flex justify-between text-xs text-zinc-400">
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      Tempo estimado
+                    </span>
+                    <span className="font-bold">{formatEta(selectedZone)}</span>
+                  </div>
+                )}
               </div>
               <div className="flex justify-between text-2xl font-black text-zinc-900 pt-4">
                 <span>Total</span>
@@ -227,7 +232,7 @@ export const Cart: React.FC = () => {
           </div>
 
           <p className="text-center text-xs text-zinc-400 px-8">
-            Ao finalizar o pedido, será redirecionado para o nosso WhatsApp para confirmar os detalhes e o pagamento.
+            Ao finalizar o pedido, será redirecionado para o nosso WhatsApp para confirmar os detalhes e o pagamento. Entregamos apenas ao domicílio, em todo o Huambo.
           </p>
         </div>
       </div>
