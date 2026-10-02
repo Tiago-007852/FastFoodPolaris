@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { BellRing, ChevronRight, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, query } from 'firebase/firestore';
-import confetti from 'canvas-confetti';
 import { useSite } from '../../SiteContext';
 import { db } from '../../firebase';
 import { useToast } from '../ToastProvider';
@@ -143,12 +142,25 @@ export const CountdownSectionImpl: React.FC = () => {
     confettiFiredRef.current = true;
     const colors = ['#E63946', '#FFD700', '#FFFFFF'];
     const end = Date.now() + 5000;
-    const frame = () => {
-      confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0, y: 0.7 }, colors });
-      confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors });
-      if (Date.now() < end) requestAnimationFrame(frame);
+    // Loaded on demand: a missing/blocked chunk must never break the section
+    let cancelled = false;
+    let raf = 0;
+    import('canvas-confetti')
+      .then(m => {
+        const confetti = m.default;
+        const frame = () => {
+          if (cancelled) return;
+          confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0, y: 0.7 }, colors });
+          confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors });
+          if (Date.now() < end) raf = requestAnimationFrame(frame);
+        };
+        frame();
+      })
+      .catch(err => console.error('Confetti failed to load:', err));
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
     };
-    frame();
   }, [now, target]);
 
   // ---- Teaser dishes (hook before early returns): real "Novidade" dishes first ----
