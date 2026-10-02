@@ -69,6 +69,26 @@ bun run api          # servidor Node (API + dist/) para produção
 bun run db:import    # opcional: copia o conteúdo atual do Firestore para o Neon
 ```
 
+### Deploy na Vercel
+
+O site é um build estático do Vite **e a API é uma serverless function** em `api/index.ts`
+(o `vercel.json` manda `/api/*` para lá e o resto para o `index.html`). Sem a function,
+todos os endpoints devolvem 404 e o login falha.
+
+Variáveis de ambiente **na Vercel** (obrigatórias em produção):
+
+| Variável | Valor |
+| --- | --- |
+| `DATABASE_URL` | a mesma connection string do Neon |
+| `BETTER_AUTH_SECRET` | o mesmo segredo (32+ caracteres) |
+| `BETTER_AUTH_URL` | `https://www.polarisfastfood.online` |
+
+Depois de um redeploy, confere `https://www.polarisfastfood.online/api/health` — tem de
+responder `{"ok":true,...}`. Se devolver 404, a function não foi publicada.
+
+> Serverless corta ligações longas, por isso o site passa a fazer polling de 20s
+> sempre que o stream SSE não está ativo.
+
 ### O que substitui o quê
 
 | Firebase | Novo |

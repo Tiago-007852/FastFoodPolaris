@@ -17,6 +17,7 @@
     "db:check:products": "tsx scripts/products-check.ts",
     "db:check:admin": "tsx scripts/admin-flow-check.ts",
     "db:check:countdown": "tsx scripts/countdown-check.ts",
+    "db:check:vercel": "tsx scripts/vercel-handler-check.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

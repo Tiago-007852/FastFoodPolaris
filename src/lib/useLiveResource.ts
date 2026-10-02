@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet, subscribeToChanges } from './api';
+import { apiGet, isSseHealthy, subscribeToChanges } from './api';
 
 /**
  * Loads a resource from the API and keeps it live: whenever the admin panel
@@ -39,9 +39,20 @@ export function useLiveResource<T>(resource: string, initial: T) {
   useEffect(() => {
     setLoading(true);
     load();
-    return subscribeToChanges((table) => {
+    const unsubscribe = subscribeToChanges((table) => {
       if (table === resource) load();
     });
+
+    // Serverless hosts cut long-lived streams, so poll while the live feed is
+    // down. With a healthy connection the interval does nothing.
+    const poll = window.setInterval(() => {
+      if (!isSseHealthy()) load();
+    }, 20000);
+
+    return () => {
+      window.clearInterval(poll);
+      unsubscribe();
+    };
   }, [resource, load]);
 
   return { data, available, loading, reload: load };

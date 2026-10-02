@@ -97,6 +97,14 @@ export const authApi = {
  * so a client only refetches what it needs — this is the Firestore `onSnapshot`
  * replacement.
  */
+let sseHealthy = false;
+
+/**
+ * True while the live stream is connected. Serverless hosts close idle
+ * connections, so consumers fall back to polling when this is false.
+ */
+export const isSseHealthy = () => sseHealthy;
+
 export function subscribeToChanges(onChange: (table: string) => void): () => void {
   if (typeof EventSource === 'undefined') return () => {};
 
@@ -107,7 +115,11 @@ export function subscribeToChanges(onChange: (table: string) => void): () => voi
   const connect = () => {
     if (closed) return;
     source = new EventSource('/api/events');
+    source.addEventListener('open', () => {
+      sseHealthy = true;
+    });
     source.addEventListener('change', (event) => {
+      sseHealthy = true;
       try {
         const payload = JSON.parse((event as MessageEvent).data);
         if (payload?.table) onChange(payload.table);
@@ -116,6 +128,7 @@ export function subscribeToChanges(onChange: (table: string) => void): () => voi
       }
     });
     source.onerror = () => {
+      sseHealthy = false;
       source?.close();
       source = null;
       // The browser reconnects too, but be explicit so a dropped stream recovers.
@@ -126,6 +139,7 @@ export function subscribeToChanges(onChange: (table: string) => void): () => voi
   connect();
   return () => {
     closed = true;
+    sseHealthy = false;
     if (retry) window.clearTimeout(retry);
     source?.close();
   };
