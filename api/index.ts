@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { envReport } from '../server/config';
 
 /**
  * Vercel serverless function — exposes the Postgres API at `/api/*`.
@@ -9,11 +8,26 @@ import { envReport } from '../server/config';
  * answers 404 and login/content fail. `vercel.json` rewrites `/api/<path>` here
  * and carries the original path in `?p=`, which `restorePath()` puts back before
  * the Express app (shared with the dev server and `bun start`) sees the request.
+ *
+ * This module deliberately has **no top-level runtime import** — only a type-only
+ * one. A value import would be resolved while the function boots, and anything
+ * that goes wrong there kills the invocation before a single `try`/`catch` of ours
+ * exists, which Vercel reports as an opaque `FUNCTION_INVOCATION_FAILED`. The API
+ * itself is loaded inside the request, where its failures can be answered with
+ * readable JSON.
  */
 
 type Handler = (req: any, res: any) => unknown;
 
 let appPromise: Promise<Handler> | null = null;
+
+/** Duplicated from `server/config.ts` on purpose — see the note above. */
+const envReport = () => ({
+  DATABASE_URL: !!process.env.DATABASE_URL,
+  BETTER_AUTH_SECRET: !!process.env.BETTER_AUTH_SECRET,
+  BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || null,
+  NODE_ENV: process.env.NODE_ENV || null,
+});
 
 /**
  * Node terminates the process on an unhandled rejection or uncaught exception,
