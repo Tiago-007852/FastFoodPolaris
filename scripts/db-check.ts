@@ -45,9 +45,16 @@ await check(
 const email = `smoke+${Date.now()}@polaris.test`;
 let cookie = '';
 
+/**
+ * Browsers always send Origin on same-origin POSTs and Better Auth only accepts
+ * origins equal to BETTER_AUTH_URL. Send it, otherwise this check fails for a
+ * reason that has nothing to do with the API.
+ */
+const ORIGIN = process.env.BETTER_AUTH_URL || base;
+
 const signUp = await fetch(`${base}/api/auth/sign-up/email`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', origin: ORIGIN },
   body: JSON.stringify({ email, password: 'polaris123', name: 'Smoke Test' }),
 });
 cookie = signUp.headers.get('set-cookie')?.split(';')[0] || '';
@@ -71,7 +78,7 @@ await check('public dish rating submit', '/api/dishRatings', {
 const adminEmail = 'miguellanttonio007@gmail.com';
 const adminSignIn = await fetch(`${base}/api/auth/sign-in/email`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', origin: ORIGIN },
   body: JSON.stringify({ email: adminEmail, password: 'polaris123' }),
 });
 const adminCookie = adminSignIn.headers.get('set-cookie')?.split(';')[0] || '';

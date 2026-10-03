@@ -65,6 +65,8 @@ bun run db:seed      # carrega o conteúdo padrão (mesmo menu do antigo seed)
 bun run db:check     # smoke test: endpoints, permissões e auth
 bun run db:check:products -- https://localhost:3000   # grava/edita/elimina um produto e confirma
 bun run db:check:admin -- https://localhost:3000      # fluxo de admin + evento SSE
+bun run db:check:vercel    # simula a serverless function da Vercel
+bun run db:check:resilience # confirma que falta de env var não crasha a function
 bun run api          # servidor Node (API + dist/) para produção
 bun run db:import    # opcional: copia o conteúdo atual do Firestore para o Neon
 ```
@@ -84,10 +86,28 @@ Variáveis de ambiente **na Vercel** (obrigatórias em produção):
 | `BETTER_AUTH_URL` | `https://www.polarisfastfood.online` |
 
 Depois de um redeploy, confere `https://www.polarisfastfood.online/api/health` — tem de
-responder `{"ok":true,...}`. Se devolver 404, a function não foi publicada.
+responder `{"ok":true,...}`. A resposta inclui `env`, que mostra **quais** variáveis a
+function está a ver (apenas se existem, nunca os valores):
+
+```json
+{ "ok": true, "env": { "DATABASE_URL": true, "BETTER_AUTH_SECRET": true, "BETTER_AUTH_URL": "https://www.polarisfastfood.online" } }
+```
+
+| O que devolve | O que significa |
+| --- | --- |
+| `404` | A function não foi publicada (o `api/index.ts` não chegou ao deploy) |
+| `503` + `env.DATABASE_URL: false` | A variável não existe no ambiente **Production** — define-a e redeploy |
+| `500` + `detail` | A API não conseguiu carregar; o `detail` diz porquê |
+| `FUNCTION_INVOCATION_FAILED` (texto puro) | A function não chegou a correr; vê os **logs da função** na Vercel |
 
 > Serverless corta ligações longas, por isso o site passa a fazer polling de 20s
-> sempre que o stream SSE não está ativo.
+> sempre que o stream SSE não está ativo. O pool do Postgres também trata as
+> ligações ociosas que o Neon fecha (`pool.on('error')`), senão a exceção matava a
+> função e a resposta era um `FUNCTION_INVOCATION_FAILED` sem explicação.
+
+Antes de cada deploy, `bun run db:check:vercel` simula a function localmente (registo,
+sessão, painel admin e SSE) e `bun run db:check:resilience` confirma que uma env var
+em falta ou uma rejeição em background devolve JSON legível em vez de crashar.
 
 ### O que substitui o quê
 

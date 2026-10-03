@@ -18,6 +18,7 @@
     "db:check:admin": "tsx scripts/admin-flow-check.ts",
     "db:check:countdown": "tsx scripts/countdown-check.ts",
     "db:check:vercel": "tsx scripts/vercel-handler-check.ts",
+    "db:check:resilience": "env -u DATABASE_URL -u BETTER_AUTH_SECRET tsx scripts/resilience-check.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

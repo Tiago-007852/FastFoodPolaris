@@ -8,20 +8,51 @@ import { Pool } from 'pg';
  */
 const connectionString = process.env.DATABASE_URL;
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL is not set — add the Neon connection string to your environment.');
-}
-
+/**
+ * The pool is built without throwing when `DATABASE_URL` is missing: this module
+ * is imported at startup by the API, the auth setup and the scripts, and a throw
+ * here kills the whole serverless invocation before any request is served. The
+ * missing variable is reported by `query()` instead, where the cause is visible.
+ */
 export const pool = new Pool({
   connectionString,
   ssl: { rejectUnauthorized: false },
   max: 5,
+  // Serverless invocations are short, so there is no point in holding clients.
+  idleTimeoutMillis: 10_000,
 });
+
+/**
+ * Neon closes idle pooled connections on its side. Node treats an unhandled
+ * `error` event as an uncaught exception, which killed the function with
+ * FUNCTION_INVOCATION_FAILED, so the event is always handled: log it and let
+ * `pg` discard that client.
+ */
+pool.on('error', (err: Error) => {
+  console.error(`[db] idle client dropped: ${err.message}`);
+});
+
+/** Fails with an actionable message, and only when a query actually runs. */
+function assertConfigured() {
+  if (!connectionString) {
+    throw new Error(
+      'DATABASE_URL is not set — add the Neon connection string to the environment (Production) and redeploy.',
+    );
+  }
+}
+
+/**
+ * The name of the variable the API needs and cannot see, or `null` when the
+ * environment is complete. Lets the API answer with a clear message instead of
+ * a generic 500 when a Production variable is missing.
+ */
+export const missingConfig = (): string | null => (connectionString ? null : 'DATABASE_URL');
 
 export type Row = Record<string, any>;
 
 /** Runs a query and returns the rows. */
 export async function query<T = Row>(text: string, params: any[] = []): Promise<T[]> {
+  assertConfigured();
   const result = await pool.query<T>(text, params);
   return result.rows;
 }

@@ -2,8 +2,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import { auth } from './auth';
 import { addClient, broadcast, startHeartbeat } from './events';
-import { SUPER_ADMIN_ROLE, isSuperAdminEmail } from './config';
-import { query, newId } from './db';
+import { SUPER_ADMIN_ROLE, envReport, isSuperAdminEmail } from './config';
+import { missingConfig, query, newId } from './db';
 import {
   ALL_DEFS,
   RESOURCES,
@@ -78,10 +78,22 @@ export function createApiApp() {
   // Base64 images arrive as data URLs, so the JSON limit has to be generous.
   app.use(express.json({ limit: '4mb' }));
 
-  app.get('/api/health', async (_req, res) => {
+  // Wrapped in asyncRoute on purpose: an unhandled rejection here would kill the
+  // Node process and answer with Vercel's opaque FUNCTION_INVOCATION_FAILED
+  // instead of a readable error.
+  app.get('/api/health', asyncRoute(async (_req, res) => {
+    const missing = missingConfig();
+    if (missing) {
+      res.status(503).json({
+        ok: false,
+        error: `A variável ${missing} não está definida neste ambiente.`,
+        env: envReport(),
+      });
+      return;
+    }
     const rows = await query('select now() as now');
-    res.json({ ok: true, now: rows[0].now });
-  });
+    res.json({ ok: true, now: rows[0].now, env: envReport() });
+  }));
 
   // Better Auth (sign up/sign in/sign out + session) — replaces Firebase Auth.
   app.all('/api/auth/*', toNodeHandler(auth));
@@ -283,6 +295,15 @@ export function createApiApp() {
   // Error handler — never leak a stack trace to the browser.
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error('[api]', err);
+    // A missing variable is a configuration problem, not a bug: say which one.
+    const missing = missingConfig();
+    if (missing) {
+      res.status(503).json({
+        error: `A variável ${missing} não está definida neste ambiente.`,
+        env: envReport(),
+      });
+      return;
+    }
     res.status(500).json({ error: 'Erro interno do servidor.' });
   });
 
