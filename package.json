@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && bun run build:api",
+    "build:api": "esbuild server/app.ts --bundle --platform=node --format=cjs --target=node20 --outfile=api/_app.cjs --log-level=warning",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "api": "tsx server/index.ts",
@@ -17,8 +18,9 @@
     "db:check:products": "tsx scripts/products-check.ts",
     "db:check:admin": "tsx scripts/admin-flow-check.ts",
     "db:check:countdown": "tsx scripts/countdown-check.ts",
-    "db:check:vercel": "tsx scripts/vercel-handler-check.ts",
-    "db:check:resilience": "env -u DATABASE_URL -u BETTER_AUTH_SECRET tsx scripts/resilience-check.ts",
+    "db:check:vercel": "bun run build:api && tsx scripts/vercel-handler-check.ts",
+    "db:check:resilience": "bun run build:api && env -u DATABASE_URL -u BETTER_AUTH_SECRET tsx scripts/resilience-check.ts",
+    "db:check:lambda": "bun run build:api && tsx scripts/lambda-bundle-check.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -29,6 +31,7 @@
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "esbuild": "^0.28.2",
     "express": "^4.21.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.546.0",

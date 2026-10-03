@@ -77,6 +77,15 @@ O site é um build estático do Vite **e a API é uma serverless function** em `
 (o `vercel.json` manda `/api/*` para lá e o resto para o `index.html`). Sem a function,
 todos os endpoints devolvem 404 e o login falha.
 
+A Vercel compila o entry da function mas **não envia nem transpila a pasta `server/`**.
+Por isso a API é empacotada para `api/_app.cjs` por `bun run build:api` (CommonJS, porque
+o Express e as suas dependências são CommonJS), e `api/index.ts` importa esse bundle.
+Importar `../server/app` directamente dá `Cannot find module '/var/task/server/app'` e a
+function morre com `FUNCTION_INVOCATION_FAILED`.
+
+`GET /api/ping` é uma sonda sem dependências: um `200` prova que a function arrancou e
+que o problema não é do código.
+
 Variáveis de ambiente **na Vercel** (obrigatórias em produção):
 
 | Variável | Valor |
@@ -105,9 +114,16 @@ function está a ver (apenas se existem, nunca os valores):
 > ligações ociosas que o Neon fecha (`pool.on('error')`), senão a exceção matava a
 > função e a resposta era um `FUNCTION_INVOCATION_FAILED` sem explicação.
 
-Antes de cada deploy, `bun run db:check:vercel` simula a function localmente (registo,
-sessão, painel admin e SSE) e `bun run db:check:resilience` confirma que uma env var
-em falta ou uma rejeição em background devolve JSON legível em vez de crashar.
+Antes de cada deploy:
+
+| Comando | O que garante |
+| --- | --- |
+| `bun run db:check:vercel` | Simula a function (registo, sessão, painel admin, SSE) |
+| `bun run db:check:lambda` | O bundle carrega sem `node_modules`, como na Vercel |
+| `bun run db:check:resilience` | Env var em falta devolve JSON, sem crashar |
+
+> A build da Vercel tem de correr `bun run build` (ou `npm run build`), que além do
+> `vite build` gera o `api/_app.cjs`. Sem esse passo a function não encontra a API.
 
 ### O que substitui o quê
 

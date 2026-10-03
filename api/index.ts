@@ -15,6 +15,17 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  * exists, which Vercel reports as an opaque `FUNCTION_INVOCATION_FAILED`. The API
  * itself is loaded inside the request, where its failures can be answered with
  * readable JSON.
+ *
+ * The API is imported from `./_app.cjs`, a bundle that `bun run build:api`
+ * produces from `server/app.ts` inside this folder. Vercel compiles the function
+ * entry but does **not** ship or transpile `server/`, so importing `../server/app`
+ * at runtime fails with `Cannot find module '/var/task/server/app'`. Keeping the
+ * bundle inside `api/` makes the function self-contained; the leading underscore
+ * keeps Vercel from turning it into a route of its own.
+ *
+ * The bundle is CommonJS on purpose: Express and its dependencies are CommonJS,
+ * and bundling them into ESM breaks Node's own modules with
+ * `Dynamic require of "path" is not supported`.
  */
 
 type Handler = (req: any, res: any) => unknown;
@@ -57,7 +68,14 @@ function loadApp(): Promise<Handler> {
   // The app is imported inside the request, not at module scope: a failure while
   // loading it (missing variable, broken dependency) then becomes a readable JSON
   // 500 instead of killing the invocation with FUNCTION_INVOCATION_FAILED.
-  appPromise ??= import('../server/app').then((m) => m.createApiApp() as unknown as Handler);
+  appPromise ??= import('./_app.cjs').then((m: any) => {
+    // A CommonJS bundle exposes its exports directly or under `default`.
+    const create = m.createApiApp || m.default?.createApiApp;
+    if (typeof create !== 'function') {
+      throw new Error('O bundle da API (api/_app.cjs) não exportou createApiApp — corre `bun run build:api`.');
+    }
+    return create() as unknown as Handler;
+  });
   // A rejected load must not become an unhandled rejection, and the next request
   // should be free to try again.
   appPromise.catch(() => {
