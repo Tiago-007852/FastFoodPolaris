@@ -72,7 +72,7 @@ const CountdownFallback: React.FC = () => {
     return () => window.clearInterval(t);
   }, []);
 
-  const target = new Date('2026-10-05T00:00:00+01:00').getTime();
+  const target = new Date('2026-10-09T09:00:00+01:00').getTime();
   const diff = Math.max(0, target - now);
   const units: { value: number; label: string }[] = [
     { value: Math.floor(diff / 86400000), label: 'Dias' },

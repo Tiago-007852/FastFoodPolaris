@@ -20,7 +20,7 @@ const SETTINGS = {
   heroImage: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?q=80&w=2070&auto=format&fit=crop',
   googleMapsUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3923.456789012345!2d15.73456789012345!3d-12.712345678901234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTLCsDQyJzQ0LjQiUyAxNcKwNDQnMDQuNCJF!5e0!3m2!1spt-PT!2sao!4v1234567890123',
   countdownEnabled: true,
-  countdownTargetDate: '2026-10-05T00:00:00+01:00',
+  countdownTargetDate: '2026-10-09T09:00:00+01:00',
   // Admin-editable background video for the countdown section.
   countdownBgVideo: '/videos/countdown-bg.mp4',
 };

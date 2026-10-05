@@ -616,7 +616,7 @@ export const Admin: React.FC = () => {
                   type="datetime-local"
                   defaultValue={settings?.countdownTargetDate
                     ? new Date(settings.countdownTargetDate).toLocaleString('sv-SE', { timeZone: 'Africa/Luanda' }).slice(0, 16).replace(' ', 'T')
-                    : '2026-10-05T00:00'}
+                    : '2026-10-09T09:00'}
                   className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all"
                 />
                 <p className="text-[11px] text-zinc-400">Hora local de Angola (UTC+1). Após esta data, o site mostra o banner "Já estamos a entregar!".</p>

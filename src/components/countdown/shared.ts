@@ -1,7 +1,7 @@
 import type { MenuItem, Teaser } from '../../types';
 
-/** Default countdown target: October 5, 2026 at 00:00:00 Angola time (UTC+1). */
-export const DEFAULT_TARGET = '2026-10-05T00:00:00+01:00';
+/** Default countdown target: October 9, 2026 at 09:00:00 Angola time (UTC+1). */
+export const DEFAULT_TARGET = '2026-10-09T09:00:00+01:00';
 
 /** localStorage key for the WhatsApp notification submission (unchanged flow). */
 export const STORAGE_KEY = 'polaris_notify_submitted';
