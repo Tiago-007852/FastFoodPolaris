@@ -1,10 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Instagram, Phone, MapPin, Clock, Facebook, Twitter } from 'lucide-react';
+import { Instagram, Phone, MapPin, Clock, Facebook, Twitter, MessageCircle } from 'lucide-react';
 import { useSite } from '../SiteContext';
+
+const stripDigits = (value: string | undefined) => (value?.replace(/\D/g, '') || '').replace(/^0/, '244');
 
 export const Footer: React.FC = () => {
   const { settings } = useSite();
+
+  const MAIN_WHATSAPP_DEFAULT = '+244 922 923 776';
+  const GENERAL_WHATSAPP_DEFAULT = '+244 928 936 650';
+
+  const whatsappDigits = stripDigits(settings?.whatsapp) || stripDigits(MAIN_WHATSAPP_DEFAULT);
+  const generalDigits = stripDigits(settings?.contactPhone) || stripDigits(GENERAL_WHATSAPP_DEFAULT);
 
   return (
     <footer className="bg-zinc-900 text-zinc-400 py-16 border-t border-white/5">
@@ -30,17 +38,15 @@ export const Footer: React.FC = () => {
                   <Instagram size={18} />
                 </a>
               )}
-              {settings?.phone && (
-                <a 
-                  href={`https://wa.me/${settings.phone.replace(/\D/g, '')}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="p-2 rounded-full bg-white/5 hover:bg-primary hover:text-white transition-all"
-                >
-                  <span className="sr-only">WhatsApp</span>
-                  <Phone size={18} />
-                </a>
-              )}
+              <a 
+                href={`https://wa.me/${whatsappDigits}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="p-2 rounded-full bg-white/5 hover:bg-primary hover:text-white transition-all"
+              >
+                <span className="sr-only">WhatsApp pedidos</span>
+                <MessageCircle size={18} />
+              </a>
             </div>
           </div>
 
@@ -62,6 +68,20 @@ export const Footer: React.FC = () => {
               <li className="flex items-start space-x-3">
                 <MapPin size={18} className="text-secondary shrink-0" />
                 <span>{settings?.address || 'Huambo, Rua 50'}</span>
+              </li>
+              {whatsappDigits && (
+                <li className="flex items-center space-x-3">
+                  <MessageCircle size={18} className="text-primary shrink-0" />
+                  <a href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-white transition-colors">
+                    {settings?.whatsapp} (WhatsApp pedidos)
+                  </a>
+                </li>
+              )}
+              <li className="flex items-center space-x-3">
+                <MessageCircle size={18} className="text-teal-400 shrink-0" />
+                <a href={`https://wa.me/${generalDigits}`} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-white transition-colors">
+                  {settings?.contactPhone || GENERAL_WHATSAPP_DEFAULT} ({settings?.contactPhoneLabel || 'WhatsApp geral'})
+                </a>
               </li>
               <li className="flex items-center space-x-3">
                 <Phone size={18} className="text-secondary shrink-0" />

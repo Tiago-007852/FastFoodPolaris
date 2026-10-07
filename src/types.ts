@@ -100,6 +100,10 @@ export interface SiteSettings {
   countdownEnabled?: boolean;
   /** Background video of the countdown section (MP4 URL or data URL). Admin editable. */
   countdownBgVideo?: string;
+  /** Segundo número de WhatsApp (ex.: WhatsApp geral/atendimento). Opcional. */
+  contactPhone?: string;
+  /** Etiqueta para o segundo número de WhatsApp. Opcional. */
+  contactPhoneLabel?: string;
 }
 
 /** Teaser card shown in the countdown section ("O que está a chegar"). Admin editable. */

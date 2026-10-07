@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, MessageCircle, ChevronLeft, Utensils, MapPin, Clock } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, MessageCircle, ChevronLeft, Utensils, MapPin, Clock, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../CartContext';
 import { useSite } from '../SiteContext';
 import { useZones, formatEta } from '../ZonesContext';
 import { ZoneSelector } from '../components/ZoneSelector';
 import { useToast } from '../components/ToastProvider';
+
+const stripDigits = (value: string | undefined) => (value?.replace(/\D/g, '') || '').replace(/^0/, '244');
 
 /**
  * Delivery-only checkout (Features 2 & 3).
@@ -24,6 +26,44 @@ export const Cart: React.FC = () => {
   const deliveryFee = selectedZone?.fee ?? settings?.deliveryFee ?? 0;
   const finalTotal = total + deliveryFee;
 
+  const orderItemsText = cart.map(item => {
+    const extras = item.selectedExtras.map(e => e.name).join(', ');
+    return `${item.quantity}x ${item.name}${extras ? ` (Extras: ${extras})` : ''} - Kz${((item.price + item.selectedExtras.reduce((s, e) => s + e.price, 0)) * item.quantity).toFixed(2)}`;
+  }).join('\n');
+
+  const makeOrderMessage = () => {
+    if (!name.trim() || !address.trim() || !selectedZone) return '';
+    return [
+      `*Novo Pedido - Polaris Fast-Food*\n\n`,
+      `*Cliente:* ${name.trim()}\n`,
+      `*Tipo:* Entrega ao Domicílio 🛵\n`,
+      `*Bairro de Entrega:* ${selectedArea}\n`,
+      `*Zona:* ${selectedZone.name}\n`,
+      `*Endereço Completo:* ${address.trim()}\n`,
+      `*Tempo Estimado:* ${formatEta(selectedZone)}\n\n`,
+      `*Itens:*\n${orderItemsText}\n\n`,
+      `*Subtotal:* Kz${total.toFixed(2)}\n`,
+      `*Taxa de Entrega:* Kz${deliveryFee.toFixed(2)}\n`,
+      `*Total:* Kz${finalTotal.toFixed(2)}\n\n`,
+      `_Por favor, confirme o meu pedido!_`,
+    ].join('');
+  };
+
+  const MAIN_WHATSAPP_DEFAULT = '+244 922 923 776';
+  const GENERAL_WHATSAPP_DEFAULT = '+244 928 936 650';
+
+  const mainDigits = stripDigits(settings?.whatsapp) || stripDigits(MAIN_WHATSAPP_DEFAULT);
+  const generalDigits = stripDigits(settings?.contactPhone) || stripDigits(GENERAL_WHATSAPP_DEFAULT);
+
+  const openWhatsApp = (digits: string, label: string) => {
+    const message = makeOrderMessage();
+    if (!message) {
+      showToast(`Por favor, preencha os dados antes de contactar o ${label}.`, 'error');
+      return;
+    }
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   const handleWhatsAppCheckout = () => {
     if (!name.trim()) {
       showToast('Por favor, insira o seu nome.', 'error');
@@ -37,27 +77,7 @@ export const Cart: React.FC = () => {
       showToast('Por favor, escolha o bairro onde quer receber o pedido.', 'error');
       return;
     }
-
-    const orderItems = cart.map(item => {
-      const extras = item.selectedExtras.map(e => e.name).join(', ');
-      return `${item.quantity}x ${item.name}${extras ? ` (Extras: ${extras})` : ''} - Kz${((item.price + item.selectedExtras.reduce((s, e) => s + e.price, 0)) * item.quantity).toFixed(2)}`;
-    }).join('\n');
-
-    const message = `*Novo Pedido - Polaris Fast-Food*\n\n` +
-      `*Cliente:* ${name.trim()}\n` +
-      `*Tipo:* Entrega ao Domicílio 🛵\n` +
-      `*Bairro de Entrega:* ${selectedArea}\n` +
-      `*Zona:* ${selectedZone.name}\n` +
-      `*Endereço Completo:* ${address.trim()}\n` +
-      `*Tempo Estimado:* ${formatEta(selectedZone)}\n\n` +
-      `*Itens:*\n${orderItems}\n\n` +
-      `*Subtotal:* Kz${total.toFixed(2)}\n` +
-      `*Taxa de Entrega:* Kz${deliveryFee.toFixed(2)}\n` +
-      `*Total:* Kz${finalTotal.toFixed(2)}\n\n` +
-      `_Por favor, confirme o meu pedido!_`;
-
-    const whatsappUrl = `https://wa.me/${settings?.whatsapp?.replace(/\D/g, '') || '244923456789'}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    openWhatsApp(mainDigits, 'WhatsApp pedidos');
     clearCart();
   };
 
@@ -220,6 +240,44 @@ export const Cart: React.FC = () => {
                 <span>Total</span>
                 <span className="text-primary">Kz{finalTotal.toFixed(2)}</span>
               </div>
+            </div>
+
+            {/* Números de WhatsApp (ambos aparecem na checkout) */}
+            <div className="space-y-4 pt-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Atendimento via WhatsApp</p>
+              <div className="grid grid-cols-2 gap-3">
+                {mainDigits && (
+                  <button
+                    onClick={() => openWhatsApp(mainDigits, 'WhatsApp pedidos')}
+                    className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl hover:bg-emerald-100 transition-all text-left"
+                  >
+                    <div className="p-3 bg-emerald-500 text-white rounded-xl shrink-0">
+                      <MessageCircle size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">WhatsApp pedidos</p>
+                      <p className="text-sm font-black text-zinc-900 truncate">{settings?.whatsapp || '+244 922 923 776'}</p>
+                    </div>
+                  </button>
+                )}
+                {generalDigits && (
+                  <button
+                    onClick={() => openWhatsApp(generalDigits, 'WhatsApp geral')}
+                    className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-2xl hover:bg-teal-100 transition-all text-left"
+                  >
+                    <div className="p-3 bg-teal-500 text-white rounded-xl shrink-0">
+                      <MessageCircle size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-widest text-teal-700">{settings?.contactPhoneLabel || 'WhatsApp geral'}</p>
+                      <p className="text-sm font-black text-zinc-900 truncate">{settings?.contactPhone || '+244 928 936 650'}</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400">
+                Escolha um número para enviar o pedido. Podes usar o WhatsApp pedidos ou o WhatsApp geral.
+              </p>
             </div>
 
             <button

@@ -4,25 +4,32 @@ import { MapPin, Phone, MessageCircle, Instagram, Clock, Navigation, Mail } from
 import { useSite } from '../SiteContext';
 import { QrCodeSection } from '../components/QrCodeSection';
 
+const stripDigits = (value: string | undefined) => (value?.replace(/\D/g, '') || '').replace(/^0/, '244');
+
 export const Contact: React.FC = () => {
   const { settings } = useSite();
+
+  const MAIN_WHATSAPP_DEFAULT = '+244 922 923 776';
+  const GENERAL_WHATSAPP_DEFAULT = '+244 928 936 650';
+
+  const mainWhatsAppDigits = stripDigits(settings?.whatsapp) || stripDigits(MAIN_WHATSAPP_DEFAULT);
+  const generalWhatsAppDigits = stripDigits(settings?.contactPhone) || stripDigits(GENERAL_WHATSAPP_DEFAULT);
 
   const contactCards = [
     {
       icon: <Phone size={24} />,
       title: 'Telefone',
       value: settings?.phone || '(244) 940250279',
-      link: `tel:${settings?.phone?.replace(/\D/g, '')}`,
+      link: `tel:${stripDigits(settings?.phone)}`,
       color: 'bg-blue-500'
     },
     {
       icon: <MessageCircle size={24} />,
-      title: 'WhatsApp',
-      value: settings?.whatsapp || '(244) 940250279',
-      link: `https://wa.me/${
-        (settings?.whatsapp?.replace(/\D/g, '') || '244940250279')
-          .replace(/^0/, '244')
-      }`,
+      title: 'WhatsApp pedidos',
+      value: settings?.whatsapp || MAIN_WHATSAPP_DEFAULT,
+      link: mainWhatsAppDigits
+        ? `https://wa.me/${mainWhatsAppDigits}`
+        : undefined,
       color: 'bg-emerald-500'
     },
     {
@@ -41,6 +48,10 @@ export const Contact: React.FC = () => {
     }
   ];
 
+  const generalWhatsAppCard = ({ icon: <MessageCircle size={24} />, title: settings?.contactPhoneLabel || 'WhatsApp geral',
+  value: settings?.contactPhone || GENERAL_WHATSAPP_DEFAULT, link: `https://wa.me/${generalWhatsAppDigits}`,
+  color: 'bg-teal-500' } as typeof contactCards[0]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="text-center space-y-4 mb-16">
@@ -53,25 +64,47 @@ export const Contact: React.FC = () => {
         <div className="space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
             {contactCards.map((card, idx) => (
+              card.link && (
+                <motion.a
+                  key={card.title}
+                  href={card.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="flex items-center space-x-4 p-6 bg-white rounded-3xl border border-black/5 shadow-xl shadow-black/5 hover:border-primary/30 transition-all group"
+                >
+                  <div className={`p-4 ${card.color} text-white rounded-2xl shadow-lg group-hover:scale-110 transition-transform`}>
+                    {card.icon}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">{card.title}</p>
+                    <p className="font-bold text-zinc-900">{card.value}</p>
+                  </div>
+                </motion.a>
+              )
+            ))}
+            {generalWhatsAppCard && (
               <motion.a
-                key={card.title}
-                href={card.link}
+                key={generalWhatsAppCard.title}
+                href={generalWhatsAppCard.link}
                 target="_blank"
                 rel="noopener noreferrer"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.1 }}
+                transition={{ delay: contactCards.filter(c => c.link).length * 0.1 }}
                 className="flex items-center space-x-4 p-6 bg-white rounded-3xl border border-black/5 shadow-xl shadow-black/5 hover:border-primary/30 transition-all group"
               >
-                <div className={`p-4 ${card.color} text-white rounded-2xl shadow-lg group-hover:scale-110 transition-transform`}>
-                  {card.icon}
+                <div className={`p-4 ${generalWhatsAppCard.color} text-white rounded-2xl shadow-lg group-hover:scale-110 transition-transform`}>
+                  {generalWhatsAppCard.icon}
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">{card.title}</p>
-                  <p className="font-bold text-zinc-900">{card.value}</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">{generalWhatsAppCard.title}</p>
+                  <p className="font-bold text-zinc-900">{generalWhatsAppCard.value}</p>
                 </div>
               </motion.a>
-            ))}
+            )}
           </div>
 
           <div className="bg-zinc-900 p-8 rounded-[40px] text-white space-y-6">

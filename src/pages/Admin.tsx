@@ -657,6 +657,19 @@ export const Admin: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">WhatsApp</label>
                 <input name="whatsapp" defaultValue={settings?.whatsapp} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                <p className="text-[11px] text-zinc-400">WhatsApp para pedidos.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">WhatsApp Geral</label>
+                <input name="contactPhone" defaultValue={settings?.contactPhone} placeholder="+244 928 936 650"
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                <p className="text-[11px] text-zinc-400">Segundo número de WhatsApp (atendimento geral). Deixe vazio se não quiser mostrar.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Etiqueta do WhatsApp Geral</label>
+                <input name="contactPhoneLabel" defaultValue={settings?.contactPhoneLabel || 'WhatsApp geral'}
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                <p className="text-[11px] text-zinc-400">Texto que aparece ao lado do WhatsApp geral (ex.: "WhatsApp geral").</p>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Email</label>
