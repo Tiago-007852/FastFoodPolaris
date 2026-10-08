@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BellRing, ChevronRight, Play, ShoppingBag } from 'lucide-react';
+import { BellRing, ChevronRight, Play, ShoppingBag, MapPin, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiGet, subscribeToChanges } from '../../lib/api';
 import { useSite } from '../../SiteContext';
+import type { SiteSettings } from '../../types';
 import { useToast } from '../ToastProvider';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { bannersForPlacement } from '../HeroCarousel';
@@ -25,6 +26,21 @@ import { TeaserSection } from './TeaserSection';
 import { NotificationModal } from './NotificationModal';
 
 const DEFAULT_VIDEO = '/videos/countdown-bg.mp4';
+
+/**
+ * Approved launch copy from the site owner, used when `SiteSettings.launchMessage`
+ * is empty. Stored via `String.raw` template literals so the build output embeds
+ * the accented Portuguese text and Unicode emoji without any escape/encode step.
+ */
+const DEFAULT_LAUNCH_COPY: readonly string[] = [
+  String.raw`Amanhã, a Polaris Fast Food abre as portas para uma experiência especial: SOMENTE SOBREMESAS! 🍰🧁`,
+  String.raw`Enquanto aperfeiçoamos os nossos hambúrgueres e restantes sabores para entregar a vocês aquilo que realmente queremos representar, amanhã vamos começar pelas nossas sobremesas.`,
+  String.raw`Porque na Polaris não queremos simplesmente vender comida.`,
+  String.raw`Queremos criar sabores que se transformem em memórias. ❤️⭐`,
+  String.raw`Amanhã: sobremesas Polaris.`,
+  String.raw`Fiquem atentos! 👀🔥`,
+  String.raw`Estamos quase prontos… 👀🍔`,
+];
 
 const IMPL_CSS = `
 .countdown-overlay {
@@ -152,6 +168,18 @@ export const CountdownSectionImpl: React.FC = () => {
   const targetIso = settings?.countdownTargetDate || DEFAULT_TARGET;
   const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
   const enabled = settings?.countdownEnabled !== false; // master switch (default: on)
+
+  /**
+   * The message shown on the post-launch banner. When the admin has not yet
+   * filled `SiteSettings.launchMessage`, the section uses the approved copy
+   * from the site owner (the current request) so the homepage already speaks
+   * about the upcoming "somente sobremesas" launch.
+   */
+  const typedSettings = settings as SiteSettings & { launchMessage?: string };
+  const launchMessage =
+    typeof typedSettings.launchMessage === 'string' && typedSettings.launchMessage.trim()
+      ? typedSettings.launchMessage.trim()
+      : DEFAULT_LAUNCH_COPY.join(String.raw`\n`);
 
   // Custom video URL from the site settings (admin-configurable)
   const videoSrc: string = settings?.countdownBgVideo?.trim() || DEFAULT_VIDEO;
@@ -286,19 +314,24 @@ export const CountdownSectionImpl: React.FC = () => {
 
   if (!enabled) return null;
 
-  // ---- After the launch date: transition to a delivery banner ----
+  // ---- After the launch date: show the launch message + CTA ----
   if (now >= target) {
+    const paragraphs = launchMessage.split(String.raw`\n`).map(p => p.trim()).filter((p): p is string => p.length > 0);
     return (
       <section id="lancamento" className="relative py-16 bg-primary overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
           <div className="space-y-3">
             <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-              🎉 Já estamos a entregar!
+              🎉 Lançamento
             </h2>
-            <p className="text-white/85 text-lg max-w-xl">
-              Faz o teu pedido agora e recebe os teus pratos favoritos em casa.
-            </p>
+            <div className="text-white/90 leading-relaxed space-y-3">
+              {paragraphs.map((para, i) => (
+                <p key={i} className={i === 0 ? 'text-xl font-semibold' : 'text-white/85 text-lg max-w-2xl'}>
+                  {para}
+                </p>
+              ))}
+            </div>
           </div>
           <Link
             to="/menu"

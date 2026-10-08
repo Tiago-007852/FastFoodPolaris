@@ -104,6 +104,8 @@ export interface SiteSettings {
   contactPhone?: string;
   /** Etiqueta para o segundo número de WhatsApp. Opcional. */
   contactPhoneLabel?: string;
+  /** Mensagem de lançamento exibida no site após a data do countdown. Opcional. */
+  launchMessage?: string;
 }
 
 /** Teaser card shown in the countdown section ("O que está a chegar"). Admin editable. */
