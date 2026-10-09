@@ -15,6 +15,7 @@
     "db:seed": "tsx scripts/db-seed.ts",
     "db:import": "tsx scripts/import-firestore.ts",
     "db:check": "tsx scripts/db-check.ts",
+    "db:copy": "tsx scripts/copy-db.ts",
     "db:check:products": "tsx scripts/products-check.ts",
     "db:check:admin": "tsx scripts/admin-flow-check.ts",
     "db:check:countdown": "tsx scripts/countdown-check.ts",

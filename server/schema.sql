@@ -118,6 +118,8 @@ create table if not exists site_settings (
 );
 
 alter table site_settings add column if not exists countdown_bg_video text;
+-- Launch copy shown inside the countdown section (admin editable).
+alter table site_settings add column if not exists launch_message text;
 
 create table if not exists about_content (
   id              text primary key default 'about' check (id = 'about'),

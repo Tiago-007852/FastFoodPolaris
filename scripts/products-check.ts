@@ -11,6 +11,13 @@ import { pool } from '../server/db';
  */
 const base = process.argv[2] || 'http://localhost:3000';
 
+/**
+ * Better Auth only accepts origins equal to BETTER_AUTH_URL. Browsers always
+ * send Origin, so this check has to as well — otherwise sign-up/sign-in fail
+ * with MISSING_OR_NULL_ORIGIN for a reason that has nothing to do with the API.
+ */
+const ORIGIN = process.env.BETTER_AUTH_URL || base;
+
 let failures = 0;
 const step = (label: string, ok: boolean, detail = '') => {
   if (!ok) failures++;
@@ -41,7 +48,7 @@ const password = 'polaris-produto-check';
 
 const signUp = await fetch(`${base}/api/auth/sign-up/email`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', origin: ORIGIN },
   body: JSON.stringify({ email, password, name: 'Produto Check' }),
 });
 step('registo do admin temporário', signUp.ok, signUp.ok ? '' : await signUp.text());
@@ -49,7 +56,7 @@ await pool.query('update "user" set role = $2 where email = $1', [email, 'admin'
 
 const signIn = await fetch(`${base}/api/auth/sign-in/email`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', origin: ORIGIN },
   body: JSON.stringify({ email, password }),
 });
 const cookie = signIn.headers.get('set-cookie')?.split(';')[0] || '';

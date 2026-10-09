@@ -145,6 +145,7 @@ const SETTINGS_FIELDS: Record<string, Field> = {
   countdownEnabled: f('countdown_enabled', 'bool'),
   countdownTargetDate: f('countdown_target_date'),
   countdownBgVideo: f('countdown_bg_video'),
+  launchMessage: f('launch_message'),
 };
 
 const ABOUT_FIELDS: Record<string, Field> = {

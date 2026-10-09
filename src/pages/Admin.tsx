@@ -162,6 +162,10 @@ export const Admin: React.FC = () => {
         const countdownRaw = formData.get('countdownTargetDate') as string;
         // datetime-local is Angola local time (UTC+1) — convert to ISO
         if (countdownRaw) updateData.countdownTargetDate = new Date(`${countdownRaw}:00+01:00`).toISOString();
+        const countdownBgVideo = (formData.get('countdownBgVideo') as string)?.trim() || '';
+        if (countdownBgVideo) updateData.countdownBgVideo = countdownBgVideo;
+        const launchMessage = (formData.get('launchMessage') as string)?.trim() || '';
+        if (launchMessage) updateData.launchMessage = launchMessage;
       }
 
       await apiPut('/settings/main', updateData);
@@ -631,6 +635,18 @@ export const Admin: React.FC = () => {
                 />
                 <p className="text-[11px] text-zinc-400">
                   Vídeo que aparece no fundo da contagem regressiva. Usa "/videos/countdown-bg.mp4" se deixares o campo vazio.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Mensagem de Lançamento</label>
+                <textarea
+                  name="launchMessage"
+                  defaultValue={settings?.launchMessage || ''}
+                  rows={8}
+                  className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all resize-y"
+                />
+                <p className="text-[11px] text-zinc-400">
+                  Texto que aparece na secção de countdown. Se deixares vazio, o site mostra o texto padrão.
                 </p>
               </div>
               <label className="flex items-center space-x-3 cursor-pointer">

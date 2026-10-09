@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BellRing, ChevronRight, Play, ShoppingBag, MapPin, Clock } from 'lucide-react';
+import { BellRing, ChevronRight, Play, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiGet, subscribeToChanges } from '../../lib/api';
 import { useSite } from '../../SiteContext';
-import type { SiteSettings } from '../../types';
 import { useToast } from '../ToastProvider';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { bannersForPlacement } from '../HeroCarousel';
@@ -33,13 +32,13 @@ const DEFAULT_VIDEO = '/videos/countdown-bg.mp4';
  * the accented Portuguese text and Unicode emoji without any escape/encode step.
  */
 const DEFAULT_LAUNCH_COPY: readonly string[] = [
+  String.raw`Estamos quase prontos… 👀🍔`,
   String.raw`Amanhã, a Polaris Fast Food abre as portas para uma experiência especial: SOMENTE SOBREMESAS! 🍰🧁`,
   String.raw`Enquanto aperfeiçoamos os nossos hambúrgueres e restantes sabores para entregar a vocês aquilo que realmente queremos representar, amanhã vamos começar pelas nossas sobremesas.`,
   String.raw`Porque na Polaris não queremos simplesmente vender comida.`,
   String.raw`Queremos criar sabores que se transformem em memórias. ❤️⭐`,
   String.raw`Amanhã: sobremesas Polaris.`,
   String.raw`Fiquem atentos! 👀🔥`,
-  String.raw`Estamos quase prontos… 👀🍔`,
 ];
 
 const IMPL_CSS = `
@@ -137,16 +136,70 @@ export const CountdownSectionImpl: React.FC = () => {
       } catch (error) {
         // The local counter keeps working when the API is unreachable.
         console.error('subscriber count:', error);
-      }
-    };
+      }  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     load();
     const unsubscribe = subscribeToChanges((table) => {
       if (table === 'subscribers') load();
     });
     return () => {
       unsubscribe();
-      if (pulse) window.clearTimeout(pulse);
-    };
+      if (pulse) window.clearTimeout(pulse  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   }, []);
 
   /**
@@ -164,21 +217,52 @@ export const CountdownSectionImpl: React.FC = () => {
     window.setTimeout(() => setCountPulse(false), 450);
   };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   // ---- Countdown target (admin-configurable) ----
   const targetIso = settings?.countdownTargetDate || DEFAULT_TARGET;
   const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
   const enabled = settings?.countdownEnabled !== false; // master switch (default: on)
 
   /**
-   * The message shown on the post-launch banner. When the admin has not yet
-   * filled `SiteSettings.launchMessage`, the section uses the approved copy
-   * from the site owner (the current request) so the homepage already speaks
-   * about the upcoming "somente sobremesas" launch.
+   * Launch message. It is rendered together with the countdown — never only
+   * after it reaches zero. Editable in the admin panel; while the field is empty
+   * the approved copy from the site owner is used.
    */
-  const typedSettings = settings as SiteSettings & { launchMessage?: string };
   const launchMessage =
-    typeof typedSettings.launchMessage === 'string' && typedSettings.launchMessage.trim()
-      ? typedSettings.launchMessage.trim()
+    typeof settings?.launchMessage === 'string' && settings.launchMessage.trim()
+      ? settings.launchMessage.trim()
       : DEFAULT_LAUNCH_COPY.join(String.raw`\n`);
 
   // Custom video URL from the site settings (admin-configurable)
@@ -215,8 +299,41 @@ export const CountdownSectionImpl: React.FC = () => {
         p.then(() => setVideoPlaying(true)).catch(() => { /* still blocked — show the play button */ });
       } else {
         setVideoPlaying(true);
-      }
-    };
+      }  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     setVideoPlaying(false);
     tryPlay();
@@ -224,8 +341,29 @@ export const CountdownSectionImpl: React.FC = () => {
     document.addEventListener('visibilitychange', tryPlay);
     return () => {
       ['loadeddata', 'canplay', 'playing'].forEach(evt => v.removeEventListener(evt, tryPlay));
-      document.removeEventListener('visibilitychange', tryPlay);
-    };
+      document.removeEventListener('visibilitychange', tryPlay  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   }, [showVideo, autoplayEnabled, videoSrc]);
 
   // ---- Video: pause while the section is off-screen (saves CPU/battery) ----
@@ -262,8 +400,41 @@ export const CountdownSectionImpl: React.FC = () => {
         } catch {
           /* noop */
         }
-      }
-    };
+      }  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   }, []);
 
   // ---- Countdown maths (computed before any early return) ----
@@ -300,52 +471,84 @@ export const CountdownSectionImpl: React.FC = () => {
           confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors });
           if (Date.now() < end) raf = requestAnimationFrame(frame);
         };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         frame();
       })
       .catch(err => console.error('Confetti failed to load:', err));
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf);
-    };
+      cancelAnimationFrame(raf  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   }, [now, target]);
 
   // ---- Teaser cards (hook before early returns): admin cards, then "Novidade" dishes ----
   const teasers = useMemo(() => buildTeasers(menuItems, managedTeasers), [menuItems, managedTeasers]);
 
-  if (!enabled) return null;
+  /**
+   * Every line is rendered. The message can arrive with literal `\n` separators
+   * (the default copy) or with real line breaks (text typed into the admin
+   * textarea), so both are split here.
+   */
+  const rawParagraphs = launchMessage
+    .split(String.raw`\n`)
+    .flatMap(part => part.split(/\r?\n/))
+    .map(part => part.trim())
+    .filter((part): part is string => part.length > 0);
 
-  // ---- After the launch date: show the launch message + CTA ----
-  if (now >= target) {
-    const paragraphs = launchMessage.split(String.raw`\n`).map(p => p.trim()).filter((p): p is string => p.length > 0);
-    return (
-      <section id="lancamento" className="relative py-16 bg-primary overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
-          <div className="space-y-3">
-            <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-              🎉 Lançamento
-            </h2>
-            <div className="text-white/90 leading-relaxed space-y-3">
-              {paragraphs.map((para, i) => (
-                <p key={i} className={i === 0 ? 'text-xl font-semibold' : 'text-white/85 text-lg max-w-2xl'}>
-                  {para}
-                </p>
-              ))}
-            </div>
-          </div>
-          <Link
-            to="/menu"
-            className="px-10 py-5 bg-white text-primary rounded-full font-black text-lg hover:bg-secondary hover:text-zinc-900 transition-all shadow-2xl shadow-black/20 flex items-center gap-3 shrink-0"
-          >
-            <ShoppingBag size={22} />
-            Pedir Agora
-            <ChevronRight size={20} />
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
+  // ---- Countdown maths (computed before any early return) ----
   const diff = Math.max(0, target - now);
   const countdown: CountdownValues = {
     days: Math.floor(diff / 86400000),
@@ -354,6 +557,39 @@ export const CountdownSectionImpl: React.FC = () => {
     seconds: Math.floor(diff / 1000) % 60,
     totalSecondsRemaining,
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const StyleComponent = STYLE_COMPONENTS[styleIndex];
   const styleName = STYLE_NAMES[styleIndex];
@@ -480,6 +716,32 @@ export const CountdownSectionImpl: React.FC = () => {
               {styleName}
             </motion.span>
           </AnimatePresence>
+        </div>
+
+        {/* ---- Launch message: visible from the first second, in step with the countdown
+             (not only after it reaches zero) and never hidden by reduced motion, which only
+             disables decorative animation. ---- */}
+        <div className="max-w-3xl mx-auto mb-10 px-1 text-center space-y-4">
+          <div className="space-y-3">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight">
+              🎉 Lançamento
+            </h2>
+            <div className="text-white/90 leading-relaxed">
+              {rawParagraphs.map((para, i) => (
+                <p
+                  key={i}
+                  className={
+                    'mx-auto max-w-2xl break-words ' +
+                    (i === 0
+                      ? 'text-lg sm:text-xl md:text-2xl font-black text-white'
+                      : 'text-sm sm:text-base leading-relaxed text-white/85')
+                  }
+                >
+                  {para}
+                </p>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* ---- Live notification counter ---- */}
