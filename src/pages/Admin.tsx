@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext';
 import { useSite } from '../SiteContext';
 import { useZones, DEFAULT_ZONES, formatEta } from '../ZonesContext';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/api';
+import { useLiveResource } from '../lib/useLiveResource';
 import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating, Teaser } from '../types';
 import { ImageUpload } from '../components/ImageUpload';
 
@@ -17,8 +18,18 @@ const resourceOf = (collection: string) => (collection === 'deliveryZones' ? 'zo
 
 export const Admin: React.FC = () => {
   const { user, isAdmin, loading: authLoading, refresh: refreshAuth } = useAuth();
-  const { categories, menuItems, settings, reviews, gallery, team, about, banners, dishRatings, teasers, loading: siteLoading } = useSite();
+  const { categories, menuItems, settings, gallery, team, about, banners, teasers, loading: siteLoading } = useSite();
   const { zones } = useZones();
+  /**
+   * Moderation lists come from the authenticated `/all` views, not from the
+   * public site context: the public /api/reviews and /api/dishRatings only
+   * expose approved/visible rows, and never advertise them in a shared cache.
+   * The SSE broadcasts ('reviews'/'dishRatings') keep these lists live too.
+   */
+  const reviewsAdmin = useLiveResource<Review[]>('reviews/all', [], 'reviews');
+  const ratingsAdmin = useLiveResource<DishRating[]>('dishRatings/all', [], 'dishRatings');
+  const reviews = reviewsAdmin.data;
+  const dishRatings = ratingsAdmin.data;
   const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'teasers' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
   const [users, setUsers] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any>(null);

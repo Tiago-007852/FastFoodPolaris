@@ -24,6 +24,22 @@ export interface ResourceDef {
   single?: boolean;
   /** Anonymous visitors may create rows (reviews, dish ratings, subscribers). */
   publicCreate?: boolean;
+  /**
+   * Rows that start their life hidden from the public (moderation queues):
+   * anonymous reads get the filtered projection, admins see everything.
+   */
+  publicRead?: PublicRead;
+}
+
+/**
+ * The public safety boundary of a moderated resource.
+ * Both strings are server-owned constants — never built from user input.
+ */
+export interface PublicRead {
+  /** SQL predicate only anonymous reads get (e.g. approved reviews). */
+  where?: string;
+  /** camelCase keys omitted from anonymous payloads (private columns). */
+  strip?: string[];
 }
 
 const f = (column: string, kind: FieldKind = 'text'): Field => ({ column, kind });
@@ -114,6 +130,9 @@ export const RESOURCES: Record<string, ResourceDef> = {
     },
     orderBy: 'date desc',
     publicCreate: true,
+    // Only approved reviews are public, and the identity of who posted them
+    // (userId) never leaves the server anonymously.
+    publicRead: { where: 'is_approved = true', strip: ['userId'] },
   },
   dishRatings: {
     name: 'dishRatings',
@@ -127,6 +146,8 @@ export const RESOURCES: Record<string, ResourceDef> = {
     },
     orderBy: 'date desc',
     publicCreate: true,
+    // Hidden ratings (user complaints, spam) are moderation data only.
+    publicRead: { where: 'is_hidden = false' },
   },
 };
 
@@ -251,14 +272,26 @@ const pickFields = (def: ResourceDef, data: Record<string, any>) => {
 
 /* -------------------------------------------------------------------- reads */
 
-export async function listRows(def: ResourceDef) {
-  const rows = await query(`select * from ${def.table} order by ${def.orderBy}`);
-  return rows.map(row => mapRow(def, row));
+/** Removes private keys from an anonymous read (no-op for admin reads). */
+const stripKeys = (row: any, keys?: string[]) => {
+  if (!keys || keys.length === 0) return row;
+  const out = { ...row };
+  for (const key of keys) delete out[key];
+  return out;
+};
+
+/** The `where` fragment is a server-owned constant from the resource definition. */
+const publicWhere = (def: ResourceDef, admin: boolean) =>
+  !admin && def.publicRead?.where ? ` where ${def.publicRead.where}` : '';
+
+export async function listRows(def: ResourceDef, admin = false) {
+  const rows = await query(`select * from ${def.table}${publicWhere(def, admin)} order by ${def.orderBy}`);
+  return rows.map((row) => stripKeys(mapRow(def, row), admin ? undefined : def.publicRead?.strip));
 }
 
 /** Returns an object for single-row resources, an array otherwise. */
-export async function read(def: ResourceDef) {
-  const rows = await listRows(def);
+export async function read(def: ResourceDef, admin = false) {
+  const rows = await listRows(def, admin);
   if (def.single) return rows[0] ?? null;
   return rows;
 }

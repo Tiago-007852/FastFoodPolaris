@@ -13,12 +13,34 @@ export interface AuthUser {
   emailVerified: boolean;
 }
 
+/**
+ * Cache of the last body + ETag per GET path. When the server changes the data
+ * it sends a new ETag (200 with the payload); when it answers 304 we reuse the
+ * previous body, so repeated polls stay cheap both on the wire and on Vercel.
+ * Routes without an ETag (auth, admin, private) are simply never cached.
+ */
+const etagCache = new Map<string, { etag: string; text: string }>();
+
+const isGet = (init?: RequestInit) => !init?.method || init.method.toUpperCase() === 'GET';
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const url = `/api${path}`;
+  const cached = isGet(init) ? etagCache.get(url) : undefined;
+
+  const res = await fetch(url, {
     credentials: 'same-origin',
     ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json', ...(init?.headers || {}) } : init?.headers,
+    headers: {
+      ...(cached ? { 'If-None-Match': cached.etag } : {}),
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers || {}),
+    },
   });
+
+  // 304 — the server confirmed the data is unchanged: reuse the cached body.
+  if (res.status === 304 && cached) {
+    return safeParse(cached.text) as T;
+  }
 
   const text = await res.text();
   const payload = text ? safeParse(text) : null;
@@ -26,6 +48,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new ApiError((payload as any)?.message || (payload as any)?.error || `Erro ${res.status}`, res.status, (payload as any)?.code);
   }
+
+  if (isGet(init)) {
+    const etag = res.headers.get('ETag');
+    if (etag) etagCache.set(url, { etag, text });
+    else etagCache.delete(url);
+  }
+
   return payload as T;
 }
 
@@ -96,6 +125,12 @@ export const authApi = {
  * Subscribes to the SSE change feed. The API broadcasts which resource changed,
  * so a client only refetches what it needs — this is the Firestore `onSnapshot`
  * replacement.
+ *
+ * One EventSource per TAB (singleton): every `useLiveResource` instance, the
+ * auth context and the countdown/teaser components register their callbacks in
+ * a shared set instead of each holding an open stream to `/api/events` — the
+ * old behaviour in serverless, with a 60 s occupied invocation per resource *
+ * per visitor.
  */
 let sseHealthy = false;
 
@@ -105,42 +140,89 @@ let sseHealthy = false;
  */
 export const isSseHealthy = () => sseHealthy;
 
-export function subscribeToChanges(onChange: (table: string) => void): () => void {
-  if (typeof EventSource === 'undefined') return () => {};
+type ChangeListener = (table: string) => void;
 
-  let source: EventSource | null = null;
-  let closed = false;
-  let retry: number | undefined;
+const listeners = new Set<ChangeListener>();
 
-  const connect = () => {
-    if (closed) return;
-    source = new EventSource('/api/events');
-    source.addEventListener('open', () => {
-      sseHealthy = true;
-    });
-    source.addEventListener('change', (event) => {
-      sseHealthy = true;
-      try {
-        const payload = JSON.parse((event as MessageEvent).data);
-        if (payload?.table) onChange(payload.table);
-      } catch {
-        // ignore malformed frames
-      }
-    });
-    source.onerror = () => {
-      sseHealthy = false;
-      source?.close();
-      source = null;
-      // The browser reconnects too, but be explicit so a dropped stream recovers.
-      if (!closed) retry = window.setTimeout(connect, 3000);
-    };
-  };
+/** Backoff: 3 s, 6 s, 12 s, 24 s, then capped at 30 s, each ± up to 0.75 s jitter. */
+const RETRY_BASE_MS = 3000;
+const RETRY_MAX_MS = 30000;
+const RETRY_JITTER_MS = 750;
 
-  connect();
-  return () => {
-    closed = true;
+let source: EventSource | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let attempt = 0;
+
+const notify = (table: string) => {
+  for (const listener of listeners) {
+    try {
+      listener(table);
+    } catch {
+      // One broken consumer cannot take the shared feed down.
+    }
+  }
+};
+
+const scheduleReconnect = () => {
+  if (reconnectTimer !== undefined) return;
+  const delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempt) + Math.random() * RETRY_JITTER_MS;
+  attempt += 1;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined;
+    connect();
+  }, delay);
+};
+
+const connect = () => {
+  if (!listeners.size || source || reconnectTimer !== undefined) return;
+  source = new EventSource('/api/events');
+  source.addEventListener('open', () => {
+    sseHealthy = true;
+    // A healthy connection resets the backoff for the next drop.
+    attempt = 0;
+  });
+  source.addEventListener('change', (event) => {
+    sseHealthy = true;
+    try {
+      const payload = JSON.parse((event as MessageEvent).data);
+      if (payload?.table) notify(payload.table);
+    } catch {
+      // ignore malformed frames
+    }
+  });
+  source.onerror = () => {
     sseHealthy = false;
-    if (retry) window.clearTimeout(retry);
     source?.close();
+    source = null;
+    // `close()` first cancels the browser's own auto-reconnect, so there is
+    // exactly one reconnect in flight — ours, with backoff and jitter.
+    scheduleReconnect();
+  };
+};
+
+/**
+ * Registers a callback for `change` events. Returns an unsubscribe function;
+ * when the last consumer unsubscribes, the connection, its reconnect timer and
+ * the health bookkeeping are all torn down.
+ */
+export function subscribeToChanges(onChange: ChangeListener): () => void {
+  listeners.add(onChange);
+
+  if (typeof EventSource !== 'undefined') {
+    connect();
+  }
+
+  return () => {
+    listeners.delete(onChange);
+    if (listeners.size > 0) return;
+
+    if (reconnectTimer !== undefined) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = undefined;
+    }
+    source?.close();
+    source = null;
+    attempt = 0;
+    sseHealthy = false;
   };
 }

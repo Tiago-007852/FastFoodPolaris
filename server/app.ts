@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
+import { createHash } from 'node:crypto';
 import { auth } from './auth';
 import { addClient, broadcast, startHeartbeat } from './events';
 import { SUPER_ADMIN_ROLE, envReport, isSuperAdminEmail } from './config';
@@ -17,6 +18,7 @@ import {
   deleteRow,
   upsertRow,
   listMenuItems,
+  listRows,
   read,
 } from './resources';
 import { seedContent } from './seed';
@@ -71,6 +73,46 @@ const asyncRoute =
   (req: Request, res: Response, next: NextFunction) => {
     handler(req, res).catch(next);
   };
+
+/*
+ * Public reads are safe to cache: they return the same payload for every
+ * visitor. Routes carrying private or per-user data — auth signs in/out, /api
+ * users, subscribers, health — must never pass here.
+ *
+ * `s-maxage` lets the Vercel edge serve the cached copy without invoking the
+ * function, cutting invocations and Fast Origin Transfer. `stale-while-
+ * revalidate` keeps serving the previous copy while the edge refetches.
+ * Admin edits therefore land for visitors within 60 s in the worst case —
+ * in line with the frontend polling interval — and live exactly as fast as
+ * before for the SSE/polling clients that bypass the edge (same-origin fetches
+ * hit the edge cache only after the TTL).
+ *
+ * The strong ETag then lets a client confirm freshness with a cheap 304 that
+ * carries no payload.
+ */
+const PUBLIC_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+
+/** Sends a JSON payload with a strong ETag, answering 304 when unchanged. */
+function sendWithEtag(req: Request, res: Response, payload: unknown) {
+  const body = JSON.stringify(payload);
+  const etag = `"${createHash('sha1').update(body).digest('hex')}"`;
+  res.set({ ETag: etag, 'Cache-Control': PUBLIC_CACHE_CONTROL });
+
+  const clientEtags = String(req.headers['if-none-match'] ?? '').split(',');
+  if (
+    clientEtags.some(
+      (tag) => tag.trim() === etag || tag.trim() === '*' || tag.trim() === `W/${etag}`,
+    )
+  ) {
+    res.status(304).end();
+    return;
+  }
+
+  res.set({ 'Content-Type': 'application/json; charset=utf-8' });
+  // `If-Modified-Since` is meaningless here (only the ETag is authoritative).
+  // Express only adds its own weak ETag when none is set, so ours wins.
+  res.send(body);
+}
 
 export function createApiApp() {
   const app = express();
@@ -171,11 +213,19 @@ export function createApiApp() {
 
   // ---- generic resource endpoints -------------------------------------------
 
+  // Public reads: cacheable at the edge (s-maxage) and validated by the client
+  // through strong ETags answered locally as 304.
+  //
+  // Moderated resources (reviews, dishRatings) split by session):
+  // - anonymous: only approved/visible rows, private keys stripped, publicly
+  //   cacheable — identical payload for every visitor, safe to cache;
+  // - admin: the full list for moderation, never cacheable (`private,
+  //   no-store`) so it can never live in a shared cache.
   app.get('/api/:resource', asyncRoute(async (req, res) => {
     const name = req.params.resource;
 
     if (name === 'menuItems') {
-      res.json(await listMenuItems());
+      sendWithEtag(req, res, await listMenuItems());
       return;
     }
 
@@ -184,7 +234,36 @@ export function createApiApp() {
       res.status(404).json({ error: 'Recurso desconhecido.' });
       return;
     }
-    res.json(await read(def));
+
+    if (def.publicRead) {
+      const admin = await isAdminUser(req);
+      const payload = await read(def, admin);
+      if (admin) {
+        res.set({ 'Cache-Control': 'private, no-store' });
+        res.json(payload);
+      } else {
+        sendWithEtag(req, res, payload);
+      }
+      return;
+    }
+
+    sendWithEtag(req, res, await read(def));
+  }));
+
+  /**
+   * Full moderation list (pending reviews, hidden ratings included) — admin
+   * only, and on a dedicated path so an administrator always reads fresh,
+   * complete data straight from the database: this URL never shares the cache
+   * key of the public reads, and the response itself is `private, no-store`.
+   */
+  app.get('/api/:resource/all', requireAdmin, asyncRoute(async (req, res) => {
+    const def = ALL_DEFS[req.params.resource];
+    if (!def) {
+      res.status(404).json({ error: 'Recurso desconhecido.' });
+      return;
+    }
+    res.set({ 'Cache-Control': 'private, no-store' });
+    res.json(await listRows(def, true));
   }));
 
   app.post('/api/:resource', asyncRoute(async (req, res) => {
