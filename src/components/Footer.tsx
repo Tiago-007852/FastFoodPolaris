@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Instagram, Phone, MapPin, Clock, Facebook, Twitter, MessageCircle, ExternalLink } from 'lucide-react';
+import { Instagram, Phone, MapPin, Clock, Facebook, Twitter, MessageCircle, ExternalLink, ArrowUpRight } from 'lucide-react';
 import { useSite } from '../SiteContext';
 
 const stripDigits = (value: string | undefined) => (value?.replace(/\D/g, '') || '').replace(/^0/, '244');
@@ -100,7 +100,7 @@ export const Footer: React.FC = () => {
                 <li className="flex items-center space-x-3">
                   <MessageCircle size={18} className="text-secondary shrink-0" />
                   <a href={`https://wa.me/${generalDigits}`} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-white transition-colors">
-                    {generalPhoneText}
+                    {GENERAL_WHATSAPP_DEFAULT} ({settings?.contactPhoneLabel || 'WhatsApp geral'})
                   </a>
                 </li>
               )}
