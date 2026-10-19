@@ -70,6 +70,65 @@ export interface DeliveryZone {
   enabled: boolean;
 }
 
+/** Estados do ciclo de vida de uma encomenda (ver server/orders.ts). */
+export type OrderStatus =
+  | 'pendente_pagamento'
+  | 'comprovativo_submetido'
+  | 'pago'
+  | 'em_preparacao'
+  | 'em_entrega'
+  | 'pronto_para_levantamento'
+  | 'concluido'
+  | 'cancelado'
+  | 'pago_rejeitado';
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pendente_pagamento: 'Pendente de pagamento',
+  comprovativo_submetido: 'Comprovativo submetido',
+  pago: 'Pago',
+  em_preparacao: 'Em preparação',
+  em_entrega: 'Em distribuição',
+  pronto_para_levantamento: 'Pronto para levantamento',
+  concluido: 'Concluída',
+  cancelado: 'Cancelada',
+  pago_rejeitado: 'Pagamento rejeitado',
+};
+
+export interface OrderItem {
+  menuItemId: string | null;
+  name: string;
+  sizeName: string | null;
+  unitPrice: number;
+  quantity: number;
+  extras: { name: string; price: number }[];
+  lineTotal: number;
+}
+
+export interface Order {
+  id: string;
+  reference: string;
+  status: OrderStatus;
+  fulfillment: 'delivery' | 'pickup';
+  userId?: string | null;
+  customerName: string;
+  customerPhone: string;
+  neighborhood?: string | null;
+  zoneName?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  paymentMethod: 'transfer' | 'express';
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  proofStatus?: 'pendente' | 'aprovado' | 'rejeitado' | null;
+  proofReviewNote?: string | null;
+  paymentValidatedAt?: string | null;
+  createdAt?: string | null;
+  paidAt?: string | null;
+  hasProof?: boolean;
+  items: OrderItem[];
+}
+
 /** Per-dish rating submitted from the "Avaliar Prato" modal (Feature 4) */
 export interface DishRating {
   id: string;
@@ -106,6 +165,12 @@ export interface SiteSettings {
   contactPhoneLabel?: string;
   /** Mensagem de lançamento exibida no site após a data do countdown. Opcional. */
   launchMessage?: string;
+  /** Pontos de levantamento e dados bancários oficiais (admin editable — nunca inventados). */
+  pickupLocation?: string;
+  bankName?: string;
+  bankAccountHolder?: string;
+  bankAccountNumber?: string;
+  bankInstructions?: string;
 }
 
 /** Teaser card shown in the countdown section ("O que está a chegar"). Admin editable. */

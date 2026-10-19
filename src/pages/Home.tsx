@@ -5,12 +5,10 @@ import { Link } from 'react-router-dom';
 import { useSite } from '../SiteContext';
 import { HeroCarousel } from '../components/HeroCarousel';
 import { NoveltiesSection } from '../components/NoveltiesSection';
-import { CountdownSection } from '../components/CountdownSection';
 import { ReviewsSection } from '../components/ReviewsSection';
 
 export const Home: React.FC = () => {
   const { menuItems } = useSite();
-
   const popularItems = menuItems.filter(item => item.isPopular).slice(0, 4);
   const promoItems = menuItems.filter(item => item.isPromo).slice(0, 3);
 
@@ -19,8 +17,58 @@ export const Home: React.FC = () => {
       {/* Feature 1 — Hero banner carousel (images + videos, autoplay, arrows, dots) */}
       <HeroCarousel />
 
-      {/* Feature 6 — Launch countdown (auto-transitions to a delivery banner after the date) */}
-      <CountdownSection />
+      {/* Feature: Polaris disponível — removed the launch countdown section */}
+      <section className="py-16 md:py-20 bg-zinc-50 border-y border-zinc-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div className="max-w-2xl">
+              <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-widest mb-3">
+                Polaris disponível
+              </span>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-zinc-900 leading-[1.1]">
+                O que já temos na Polaris
+              </h2>
+              <p className="mt-4 text-zinc-500 text-base sm:text-lg max-w-xl">
+                Já podes encomendar alguns dos nossos pratos e bebidas mais populares.
+                A seleção abaixo vai crescendo ao longo do tempo.
+              </p>
+            </div>
+
+            <div className="shrink-0">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-500">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                A seleção está atualizada
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5 mt-8">
+            <div className="bg-white rounded-2xl border border-black/5 p-3 text-center shadow-sm">
+              <span className="text-3xl">🍔</span>
+              <p className="mt-2 text-sm font-bold text-zinc-900 leading-snug">Hambúrgueres</p>
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">Já disponível</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-black/5 p-3 text-center shadow-sm">
+              <span className="text-3xl">🥤</span>
+              <p className="mt-2 text-sm font-bold text-zinc-900 leading-snug">Bebidas</p>
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">Já disponível</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-black/5 p-3 text-center shadow-sm">
+              <span className="text-3xl">🍟</span>
+              <p className="mt-2 text-sm font-bold text-zinc-900 leading-snug">Bifes &amp; acompanhamentos</p>
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">Já disponível</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-black/5 p-3 text-center shadow-sm">
+              <span className="text-3xl">🍰</span>
+              <p className="mt-2 text-sm font-bold text-zinc-900 leading-snug">Sobremesas</p>
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">A configurar</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Feature 1 — "Novidades & Promoções" media card grid with lightbox */}
       <NoveltiesSection />
@@ -145,3 +193,5 @@ export const Home: React.FC = () => {
     </div>
   );
 };
+
+export default Home;

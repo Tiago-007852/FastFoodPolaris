@@ -4,7 +4,24 @@ import { createHash } from 'node:crypto';
 import { auth } from './auth';
 import { addClient, broadcast, startHeartbeat } from './events';
 import { SUPER_ADMIN_ROLE, envReport, isSuperAdminEmail } from './config';
-import { missingConfig, query, newId } from './db';
+import { missingConfig, query, queryOne, newId } from './db';
+import {
+  createOrder,
+  getOrder,
+  getForTracking,
+  getEvents,
+  listMine,
+  listForAdmin,
+  uploadProof,
+  readProof,
+  approvePayment,
+  rejectPayment,
+  moveStatus,
+  cancelByCustomer,
+  OrderError,
+} from './orders';
+import { expressGatewayConfigured, gatewayEnv, verifyGatewaySignature } from './payments';
+import { checkSignInLock, recordSignInFailure, recordSignInSuccess } from './login-lock';
 import {
   ALL_DEFS,
   RESOURCES,
@@ -118,7 +135,9 @@ export function createApiApp() {
   const app = express();
 
   // Base64 images arrive as data URLs, so the JSON limit has to be generous.
-  app.use(express.json({ limit: '4mb' }));
+  // The raw body is kept so the payment webhook can verify its signature over
+  // the exact bytes the provider signed.
+  app.use(express.json({ limit: '6mb', verify: (req, _res, buf) => { (req as any).rawBody = buf; } }));
 
   // Wrapped in asyncRoute on purpose: an unhandled rejection here would kill the
   // Node process and answer with Vercel's opaque FUNCTION_INVOCATION_FAILED
@@ -138,6 +157,29 @@ export function createApiApp() {
   }));
 
   // Better Auth (sign up/sign in/sign out + session) — replaces Firebase Auth.
+  // The sign-in route is wrapped so the 3-failure lockout lives in the database
+  // (login_locks), not in the browser. Everything else passes through untouched.
+  const authHandler = toNodeHandler(auth);
+  app.post('/api/auth/sign-in/email', asyncRoute(async (req, res) => {
+    const lock = await checkSignInLock(String(req.body?.email || ''));
+    if (lock.locked) {
+      res.status(429).json({
+        code: 'ACCOUNT_LOCKED',
+        message: 'O acesso está temporariamente bloqueado (3 tentativas falhadas). Tente de novo mais tarde ou recupere a sua palavra-passe em "Esqueceu-se?".',
+      });
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      Promise.resolve(authHandler(req, res)).then(() => resolve(), () => resolve());
+    });
+    // Never let lock bookkeeping break the auth response (e.g. a closing pool).
+    try {
+      if (res.statusCode >= 400) await recordSignInFailure(String(req.body?.email || ''));
+      else await recordSignInSuccess(String(req.body?.email || ''));
+    } catch (err) {
+      console.error('[auth] login-lock bookkeeping failed:', (err as Error)?.message);
+    }
+  }));
   app.all('/api/auth/*', toNodeHandler(auth));
 
   // Server-Sent Events — replaces Firestore realtime listeners.
@@ -174,6 +216,231 @@ export function createApiApp() {
     broadcast('subscribers');
     res.json({ ok: true });
   }));
+
+  // ---- orders (checkout P0) --------------------------------------------------
+
+  /** Creates an order; totals are always recalculated server-side; idempotent by clientToken. */
+  app.post('/api/orders', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const { order, created } = await createOrder(req.body || {}, session?.id ?? null);
+    if (created) broadcast('orders');
+    res.status(created ? 201 : 200).json(order);
+  }));
+
+  /** Orders of the signed-in customer. */
+  app.get('/api/orders/mine', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    if (!session) {
+      res.status(401).json({ error: 'Inicie sessão para ver as suas encomendas.' });
+      return;
+    }
+    res.json(await listMine(session.id));
+  }));
+
+  /** Guest tracking by reference + phone (no session needed). */
+  app.get('/api/orders/tracking/:reference', asyncRoute(async (req, res) => {
+    const order = await getForTracking(String(req.params.reference || ''), req.query.phone);
+    res.json(order);
+  }));
+
+  /** Single order — owner or admin only; a guest uses /tracking instead. */
+  app.get('/api/orders/:id', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await getOrder(String(req.params.id));
+    if (!order) {
+      res.status(404).json({ error: 'Encomenda não encontrada.' });
+      return;
+    }
+    const isOwner = !!session && !!order.userId && order.userId === session.id;
+    const isAdmin = !!session && session.role === SUPER_ADMIN_ROLE;
+    if (!isOwner && !isAdmin) {
+      // Includes a signed-in user poking at another customer's order — guest
+      // orders belong to whoever has the reference + phone pair.
+      res.status(session ? 403 : 401).json({ error: 'Não tem permissão para ver esta encomenda.' });
+      return;
+    }
+    res.json(order);
+  }));
+
+  /** Order status timeline (owner or admin). */
+  app.get('/api/orders/:id/events', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await getOrder(String(req.params.id));
+    if (!order) {
+      res.status(404).json({ error: 'Encomenda não encontrada.' });
+      return;
+    }
+    const isOwner = session && order.userId === session.id;
+    if (!session || (!isOwner && session.role !== SUPER_ADMIN_ROLE)) {
+      res.status(session ? 403 : 401).json({ error: 'Sem permissão.' });
+      return;
+    }
+    res.json(await getEvents(String(req.params.id)));
+  }));
+
+  /** Transfer receipt upload — owner session or reference+phone. */
+  app.post('/api/orders/:id/proof', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const proof = await uploadProof(
+      String(req.params.id),
+      req.body?.filename,
+      req.body?.dataUrl,
+      req.body?.note,
+      { userId: session?.id ?? null, reference: req.body?.reference ?? null, phone: req.body?.phone ?? null },
+    );
+    broadcast('orders');
+    res.json(proof);
+  }));
+
+  /** The receipt bytes itself — only the owner, the guest who matches
+   *  reference+phone, or an admin, ever reach the data. */
+  app.get('/api/orders/:id/proof', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const proof = await readProof(String(req.params.id));
+    const allowed =
+      (session && (session.role === SUPER_ADMIN_ROLE || proof.userId === session.id)) ||
+      (proof.userId === null && String(req.query.reference || '') && String(req.query.phone || ''));
+    if (!allowed) {
+      res.status(403).json({ error: 'Sem permissão.' });
+      return;
+    }
+    res.json({ mime: proof.mime, dataUrl: `data:${proof.mime};base64,${proof.data}` });
+  }));
+
+  app.post('/api/orders/:id/cancel', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await cancelByCustomer(
+      String(req.params.id),
+      { userId: session?.id ?? null, reference: req.body?.reference ?? null, phone: req.body?.phone ?? null },
+    );
+    broadcast('orders');
+    res.json(order);
+  }));
+
+  /** Admin order management. */
+  app.get('/api/admin/orders', requireAdmin, asyncRoute(async (req, res) => {
+    res.json(await listForAdmin({
+      status: req.query.status ? String(req.query.status) : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    }));
+  }));
+
+  app.post('/api/admin/orders/:id/payment/approve', requireAdmin, asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await approvePayment(String(req.params.id), session!.id, req.body?.note);
+    broadcast('orders');
+    res.json(order);
+  }));
+
+  app.post('/api/admin/orders/:id/payment/reject', requireAdmin, asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await rejectPayment(String(req.params.id), session!.id, String(req.body?.reason || ''));
+    broadcast('orders');
+    res.json(order);
+  }));
+
+  app.post('/api/admin/orders/:id/status', requireAdmin, asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    const order = await moveStatus(String(req.params.id), String(req.body?.status || ''), session!.id);
+    broadcast('orders');
+    res.json(order);
+  }));
+
+  /** Profile of the signed-in user (P1) — never another user's data. */
+  app.get('/api/profile', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    if (!session) {
+      res.status(401).json({ error: 'Inicie sessão para ver o seu perfil.' });
+      return;
+    }
+    const profile = await queryOne(
+      'select full_name, phone, address, neighborhood from user_profiles where user_id = $1',
+      [session.id],
+    );
+    res.json({
+      name: session.name,
+      email: session.email,
+      fullName: profile?.full_name ?? session.name,
+      phone: profile?.phone ?? '',
+      address: profile?.address ?? '',
+      neighborhood: profile?.neighborhood ?? '',
+    });
+  }));
+
+  app.patch('/api/profile', asyncRoute(async (req, res) => {
+    const session = await getSessionUser(req);
+    if (!session) {
+      res.status(401).json({ error: 'Inicie sessão para editar o seu perfil.' });
+      return;
+    }
+    const fullName = String(req.body?.fullName || '').trim().slice(0, 80);
+    const phone = String(req.body?.phone || '').replace(/\D/g, '').slice(-9);
+    const address = String(req.body?.address || '').trim().slice(0, 400);
+    const neighborhood = String(req.body?.neighborhood || '').trim().slice(0, 80);
+    if (phone && !/^9\d{8}$/.test(phone)) {
+      res.status(400).json({ error: 'Telefone inválido (9xx xxx xxx).' });
+      return;
+    }
+    await query(
+      `insert into user_profiles (user_id, full_name, phone, address, neighborhood, updated_at)
+       values ($1,$2,$3,$4,$5, now())
+       on conflict (user_id) do update set
+         full_name = $2, phone = $3, address = $4, neighborhood = $5, updated_at = now()`,
+      [session.id, fullName, phone || '', address, neighborhood],
+    );
+    res.json({ ok: true });
+  }));
+
+  /** Payment provider webhook — verified by signature, disabled while the
+   *  Express gateway is not configured. Signed notifications are the only way
+   *  an order becomes 'pago' by electronics; the browser never decides it. */
+  app.post('/api/payments/express/webhook', asyncRoute(async (req, res) => {
+    try {
+      if (!expressGatewayConfigured()) {
+        res.status(503).json({ error: 'A integração de pagamento eletrónico não está ativada.', env: gatewayEnv() });
+        return;
+      }
+      const raw = String((req as any).rawBody || '');
+      if (!verifyGatewaySignature(raw, req.headers['x-signature'] as string | undefined)) {
+        res.status(401).json({ error: 'Assinatura inválida.' });
+        return;
+      }
+      const body = req.body || {};
+      const reference = String(body?.reference || '');
+      const rows = await queryOne('select id, status, payment_method from orders where reference = $1', [reference]);
+      // Unknown references are acknowledged (signature was valid) so the provider
+      // does not retry forever — but nothing is marked paid.
+      if (!rows || rows.payment_method !== 'express') {
+        res.json({ ok: true });
+        return;
+      }
+      // Idempotent: repeated notifications for an already-paid order are no-ops.
+      if (rows.status === 'pago') {
+        res.json({ ok: true, duplicate: true });
+        return;
+      }
+      if (String(body?.status || '') === 'paid' && ['pendente_pagamento', 'comprovativo_submetido'].includes(rows.status)) {
+        const session = await getSessionUser(req);
+        await approvePayment(String(rows.id), 'gateway:' + (session?.id ?? 'express'), `Notificação do gateway (${String(body?.transactionId || '')})`);
+        broadcast('orders');
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      if (err instanceof OrderError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+  }));
+
+  /** Payment methods offered at checkout. */
+  app.get('/api/payments/methods', (_req, res) => {
+    res.json({
+      transfer: { available: true, label: 'Transferência bancária' },
+      express: { available: expressGatewayConfigured(), label: 'Pagamento eletrónico Express' },
+    });
+  });
 
   // Admin user management (replaces the `users` collection).
   app.get('/api/users', requireAdmin, asyncRoute(async (_req, res) => {
@@ -373,6 +640,17 @@ export function createApiApp() {
 
   // Error handler — never leak a stack trace to the browser.
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Business errors (validation, state machine, permissions) carry their own
+    // HTTP status and a readable message for the customer.
+    if (err instanceof OrderError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    // A proof upload beyond the body-parser limit must read as a client error.
+    if (err?.type === 'entity.too.large') {
+      res.status(413).json({ error: 'O ficheiro é demasiado grande. Limite: 4 MB.' });
+      return;
+    }
     console.error('[api]', err);
     // A missing variable is a configuration problem, not a bug: say which one.
     const missing = missingConfig();

@@ -80,14 +80,24 @@ export const Navbar: React.FC = () => {
             {/* Auth */}
             {user ? (
               <div className="flex items-center space-x-3">
-                {user.image ? (
-                  <img src={user.image} alt="" className="w-8 h-8 rounded-full border border-black/5" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 border border-black/5">
-                    <User size={16} />
-                  </div>
-                )}
-                <button onClick={handleLogout} className="p-2 text-zinc-600 hover:text-red-500 transition-colors">
+                {/* Ação única clara por contexto: no desktop, o avatar leva ao perfil e termina sessão fica ao lado. */}
+                <Link
+                  to="/perfil"
+                  title="A minha conta"
+                  className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 transition-colors"
+                >
+                  {user.image ? (
+                    <img src={user.image} alt="" className="w-8 h-8 rounded-full border border-black/5" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-zinc-500 border border-black/5">
+                      <User size={16} />
+                    </div>
+                  )}
+                  <span className="hidden lg:inline text-xs font-bold text-zinc-700 max-w-[120px] truncate">
+                    {user.name || 'Minha conta'}
+                  </span>
+                </Link>
+                <button onClick={handleLogout} title="Terminar sessão" className="p-2 text-zinc-600 hover:text-red-500 transition-colors">
                   <LogOut size={20} />
                 </button>
               </div>
@@ -135,16 +145,27 @@ export const Navbar: React.FC = () => {
                 </Link>
               ))}
               {user ? (
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    setIsOpen(false);
-                  }}
-                  className="w-full mt-4 flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 font-medium"
-                >
-                  <LogOut size={18} />
-                  <span>Sair</span>
-                </button>
+                <>
+                  <Link
+                    to="/perfil"
+                    onClick={() => setIsOpen(false)}
+                    className={`block px-3 py-4 text-base font-medium rounded-xl ${
+                      location.pathname === '/perfil' ? 'bg-primary/10 text-primary' : 'text-zinc-600'
+                    }`}
+                  >
+                    A minha conta
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsOpen(false);
+                    }}
+                    className="w-full mt-4 flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 font-medium"
+                  >
+                    <LogOut size={18} />
+                    <span>Sair</span>
+                  </button>
+                </>
               ) : (
                 <Link
                   to="/login"

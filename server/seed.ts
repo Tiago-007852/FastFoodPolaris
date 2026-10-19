@@ -23,6 +23,10 @@ const SETTINGS = {
   countdownTargetDate: '2026-10-09T09:00:00+01:00',
   // Admin-editable background video for the countdown section.
   countdownBgVideo: '/videos/countdown-bg.mp4',
+  // Coordenadas bancárias oficiais da transferência (confirmadas pela Polaris).
+  bankName: 'BAI',
+  bankAccountHolder: 'Consultoria e prestação de serviços',
+  bankAccountNumber: '0040 0000 0981 2122 1014 8',
 };
 
 const ABOUT = {

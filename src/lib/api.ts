@@ -113,10 +113,43 @@ export const authApi = {
   session: () => request<{ user: AuthUser; session: unknown } | null>('/auth/get-session'),
 
   requestPasswordReset: (email: string) =>
-    request<{ status: boolean }>('/auth/forget-password', {
+    request<{ status: boolean }>('/auth/request-password-reset', {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+
+  /** Define a nova palavra-passe com o token da ligação ?token=… */
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ status: boolean }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
+};
+
+/* -------------------------------------------------------------- checkout */
+
+import type { Order } from '../types';
+
+export const ordersApi = {
+  /** Cria a encomenda no servidor — os totais devolvidos são sempre os recalculados lá. */
+  create: (payload: Record<string, unknown>) => request<Order>('/orders', { method: 'POST', body: JSON.stringify(payload) }),
+
+  mine: () => request<Order[]>('/orders/mine'),
+
+  track: (reference: string, phone: string) =>
+    request<Order>(`/orders/tracking/${encodeURIComponent(reference)}?phone=${encodeURIComponent(phone)}`),
+
+  cancel: (id: string, guest?: { reference: string; phone: string }) =>
+    request<Order>(`/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify(guest ?? {}) }),
+
+  uploadProof: (id: string, payload: { dataUrl: string; filename: string; note?: string; reference?: string; phone?: string }) =>
+    request<Order>(`/orders/${id}/proof`, { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+export const profileApi = {
+  get: () => request<{ name: string; email: string; fullName: string; phone: string; address: string; neighborhood: string }>('/profile'),
+  update: (data: { fullName: string; phone: string; address: string; neighborhood: string }) =>
+    request<{ ok: true }>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /* ---------------------------------------------------------------- realtime */

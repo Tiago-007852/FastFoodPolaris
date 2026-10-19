@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone, MonitorPlay, MapPin, Power, Eye, EyeOff, RotateCcw, Sparkles } from 'lucide-react';
+import { Settings, Plus, Trash2, Edit2, Save, X, LogIn, LayoutGrid, Utensils, Star, Image as ImageIcon, Check, AlertCircle, Upload, Users, Phone, MonitorPlay, MapPin, Power, Eye, EyeOff, RotateCcw, Sparkles, Package } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useSite } from '../SiteContext';
 import { useZones, DEFAULT_ZONES, formatEta } from '../ZonesContext';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/api';
 import { useLiveResource } from '../lib/useLiveResource';
-import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating, Teaser } from '../types';
+import { Category, MenuItem, SiteSettings, Review, GalleryImage, TeamMember, AboutContent, Banner, DeliveryZone, DishRating, Teaser, Order, OrderStatus, ORDER_STATUS_LABELS } from '../types';
 import { ImageUpload } from '../components/ImageUpload';
 
 /** Admin panel data helpers — every write goes to the Postgres API now. */
@@ -30,7 +30,7 @@ export const Admin: React.FC = () => {
   const ratingsAdmin = useLiveResource<DishRating[]>('dishRatings/all', [], 'dishRatings');
   const reviews = reviewsAdmin.data;
   const dishRatings = ratingsAdmin.data;
-  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'teasers' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'categories' | 'menu' | 'banners' | 'teasers' | 'zones' | 'reviews' | 'ratings' | 'gallery' | 'about' | 'users' | 'contacts' | 'orders'>('settings');
   const [users, setUsers] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +40,103 @@ export const Admin: React.FC = () => {
   const [tempImage2, setTempImage2] = useState<string>('');
   const [extras, setExtras] = useState<{ name: string; price: number }[]>([]);
   const [sizes, setSizes] = useState<{ name: string; price: number }[]>([]);
+
+  /**
+   * Encomendas (P1): lista viva de todas as encomendas do dia-a-dia.
+   * O servidor recusa sempre quem não é admin — o hook mantém a lista vazia
+   * nesse caso em vez de rebentar a página.
+   */
+  const ordersLive = useLiveResource<Order[]>('admin/orders', [], 'orders');
+  const orders = ordersLive.data;
+  const [ordersFilter, setOrdersFilter] = useState<string>('');
+  const [proofView, setProofView] = useState<{ id: string; title: string } | null>(null);
+  const [proofUrl, setProofUrl] = useState<string>('');
+  const [proofBusy, setProofBusy] = useState(false);
+  const [proofError, setProofError] = useState('');
+
+  /** Espelho do mapa de transições do servidor (fonte de verdade: server/orders.ts). */
+  const CLIENT_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+    pendente_pagamento: ['comprovativo_submetido', 'pago', 'cancelado'],
+    comprovativo_submetido: ['comprovativo_submetido', 'pago', 'pago_rejeitado', 'cancelado'],
+    pago_rejeitado: ['comprovativo_submetido', 'cancelado'],
+    pago: ['em_preparacao', 'cancelado'],
+    em_preparacao: ['em_entrega', 'pronto_para_levantamento', 'concluido', 'cancelado'],
+    em_entrega: ['concluido', 'cancelado'],
+    pronto_para_levantamento: ['concluido', 'cancelado'],
+    concluido: [],
+    cancelado: [],
+  };
+
+  const openProof = async (id: string, title: string) => {
+    setProofView({ id, title });
+    setProofUrl('');
+    setProofError('');
+    setProofBusy(true);
+    try {
+      const proof = await apiGet<{ mime: string; dataUrl: string }>(`/orders/${id}/proof`);
+      setProofUrl(proof.dataUrl);
+    } catch (err) {
+      logError(err, `/orders/${id}/proof`);
+      setProofError('Não foi possível carregar o comprovativo.');
+    } finally {
+      setProofBusy(false);
+    }
+  };
+
+  const handleApproveOrderPayment = async (id: string) => {
+    if (!confirm('Confirmar o pagamento desta encomenda?')) return;
+    try {
+      await apiPost(`/admin/orders/${id}/payment/approve`, {});
+      setStatus({ type: 'success', message: 'Pagamento aprovado!' });
+      ordersLive.reload();
+    } catch (err) {
+      logError(err, 'approvePayment');
+      setStatus({ type: 'error', message: 'Erro ao aprovar o pagamento.' });
+    }
+  };
+
+  const handleRejectOrderPayment = async (id: string) => {
+    const reason = window.prompt('Motivo da rejeição (visível ao cliente):');
+    if (reason === null) return;
+    try {
+      await apiPost(`/admin/orders/${id}/payment/reject`, { reason: reason.trim() || 'Comprovativo não validado.' });
+      setStatus({ type: 'success', message: 'Pagamento rejeitado.' });
+      ordersLive.reload();
+    } catch (err) {
+      logError(err, 'rejectPayment');
+      setStatus({ type: 'error', message: 'Erro ao rejeitar o pagamento.' });
+    }
+  };
+
+  const handleMoveOrderStatus = async (id: string, to: OrderStatus) => {
+    try {
+      await apiPost(`/admin/orders/${id}/status`, { status: to });
+      setStatus({ type: 'success', message: `Estado atualizado para «${ORDER_STATUS_LABELS[to]}».` });
+      ordersLive.reload();
+    } catch (err) {
+      logError(err, 'moveOrderStatus');
+      setStatus({ type: 'error', message: 'Transição de estado recusada pelo servidor.' });
+    }
+  };
+
+  const filteredOrders = ordersFilter
+    ? orders.filter((o) => o.status === ordersFilter)
+    : orders;
+
+  const orderStatusBadge = (s: OrderStatus) => {
+    const styles: Record<OrderStatus, string> = {
+      pendente_pagamento: 'bg-amber-100 text-amber-700',
+      comprovativo_submetido: 'bg-blue-100 text-blue-700',
+      pago: 'bg-green-100 text-green-700',
+      em_preparacao: 'bg-purple-100 text-purple-700',
+      em_entrega: 'bg-indigo-100 text-indigo-700',
+      pronto_para_levantamento: 'bg-teal-100 text-teal-700',
+      concluido: 'bg-zinc-200 text-zinc-700',
+      cancelado: 'bg-red-100 text-red-600',
+      pago_rejeitado: 'bg-orange-100 text-orange-700',
+    };
+    return <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${styles[s] || 'bg-zinc-200 text-zinc-700'}`}>{ORDER_STATUS_LABELS[s] || s}</span>;
+  };
 
   useEffect(() => {
     if (activeTab === 'users' && isAdmin) {
@@ -571,6 +668,7 @@ export const Admin: React.FC = () => {
           { id: 'reviews', label: 'Avaliações', icon: <Star size={18} /> },
           { id: 'ratings', label: 'Notas de Pratos', icon: <Star size={18} /> },
           { id: 'users', label: 'Utilizadores', icon: <Users size={18} /> },
+          { id: 'orders', label: 'Encomendas', icon: <Package size={18} /> },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -715,6 +813,23 @@ export const Admin: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Google Maps URL</label>
                 <input name="googleMapsUrl" defaultValue={settings?.googleMapsUrl} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+              </div>
+            </div>
+            <div className="md:col-span-2 pt-6 border-t border-black/5">
+              <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4">Coordenadas bancárias (checkout · transferência)</h4>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Banco</label>
+                  <input name="bankName" defaultValue={settings?.bankName} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Titular</label>
+                  <input name="bankAccountHolder" defaultValue={settings?.bankAccountHolder} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">IBAN / Conta</label>
+                  <input name="bankAccountNumber" defaultValue={settings?.bankAccountNumber} className="w-full px-5 py-4 bg-zinc-50 border border-black/5 rounded-2xl focus:outline-none focus:border-primary transition-all" />
+                </div>
               </div>
             </div>
             <div className="md:col-span-2 pt-6">
@@ -1163,6 +1278,152 @@ export const Admin: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'orders' && (
+          <div className="space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-2xl font-black text-zinc-900">Encomendas</h3>
+              <div className="flex items-center gap-3">
+                <select
+                  value={ordersFilter}
+                  onChange={(e) => setOrdersFilter(e.target.value)}
+                  className="px-4 py-2.5 bg-zinc-50 border border-black/5 rounded-xl text-sm font-bold text-zinc-700 focus:outline-none focus:border-primary"
+                  aria-label="Filtrar por estado"
+                >
+                  <option value="">Todos os estados</option>
+                  {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map((s) => (
+                    <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={ordersLive.reload}
+                  className="px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl font-bold hover:bg-zinc-200 transition-all text-sm"
+                >
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            {filteredOrders.length === 0 ? (
+              <p className="text-zinc-500 font-medium py-12 text-center">
+                {ordersFilter ? 'Nenhuma encomenda neste estado.' : 'Ainda não há encomendas.'}
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {filteredOrders.map((order) => {
+                  const nextStatuses = (CLIENT_TRANSITIONS[order.status] || []).filter((s) => s !== order.status);
+                  return (
+                    <div key={order.id} className="p-6 rounded-2xl border border-black/5 bg-zinc-50 space-y-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-zinc-900">#{order.reference}</span>
+                            {orderStatusBadge(order.status)}
+                            <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-full bg-zinc-200 text-zinc-700">
+                              {order.fulfillment === 'pickup' ? 'Levantamento' : 'Entrega'}
+                            </span>
+                            {order.hasProof && (
+                              <button
+                                onClick={() => openProof(order.id, `Comprovativo #${order.reference}`)}
+                                className="p-1.5 text-zinc-500 hover:text-primary transition-colors"
+                                title="Ver comprovativo"
+                              >
+                                <Eye size={16} />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-sm text-zinc-600">
+                            {order.customerName} · {order.customerPhone}
+                            {order.customerEmail ? ` · ${order.customerEmail}` : ''}
+                            {order.fulfillment === 'delivery' && order.neighborhood ? ` · ${order.neighborhood}` : ''}
+                            {order.fulfillment === 'delivery' && order.address ? `, ${order.address}` : ''}
+                          </p>
+                          <p className="text-xs text-zinc-400">
+                            {order.createdAt ? new Date(order.createdAt).toLocaleString('pt-PT') : '—'} · {order.paymentMethod === 'express' ? 'Express' : 'Transferência'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-primary">{order.total.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })}</p>
+                          <p className="text-xs text-zinc-500">subtotal {order.subtotal.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })} + entrega {order.deliveryFee.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-zinc-600 space-y-0.5">
+                        {(order.items || []).map((item, i) => (
+                          <p key={i}>
+                            {item.quantity}× {item.name}{item.sizeName ? ` (${item.sizeName})` : ''}
+                            {item.extras?.length ? ` + ${item.extras.map((ex) => ex.name).join(', ')}` : ''}
+                          </p>
+                        ))}
+                      </div>
+
+                      {nextStatuses.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {(order.status === 'comprovativo_submetido' || order.status === 'pendente_pagamento' || order.status === 'pago_rejeitado') && (
+                            <>
+                              <button
+                                onClick={() => handleApproveOrderPayment(order.id)}
+                                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold transition-all"
+                              >
+                                Aprovar pagamento
+                              </button>
+                              <button
+                                onClick={() => handleRejectOrderPayment(order.id)}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-all"
+                              >
+                                Rejeitar pagamento
+                              </button>
+                            </>
+                          )}
+                          {nextStatuses.map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => handleMoveOrderStatus(order.id, s)}
+                              className="px-4 py-2 bg-white border border-black/5 hover:border-primary/40 text-zinc-600 rounded-xl text-sm font-bold transition-all"
+                            >
+                              → {ORDER_STATUS_LABELS[s]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Visualizador de comprovativo (roteiro privado, nunca URL público) */}
+        <AnimatePresence>
+          {proofView && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setProofView(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-3xl p-6 max-w-lg w-full space-y-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-black text-zinc-900">{proofView.title}</p>
+                  <button onClick={() => setProofView(null)} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-500 transition-all" aria-label="Fechar">
+                    <X size={18} />
+                  </button>
+                </div>
+                {proofBusy && <p className="text-zinc-500 text-sm">A carregar…</p>}
+                {proofError && <p className="text-red-500 text-sm font-bold">{proofError}</p>}
+                {proofUrl && <img src={proofUrl} alt={`Comprovativo da encomenda ${proofView.id}`} className="max-h-[60vh] w-auto rounded-xl mx-auto" loading="lazy" decoding="async" />}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {activeTab === 'reviews' && (
           <div className="space-y-8">

@@ -167,6 +167,14 @@ const SETTINGS_FIELDS: Record<string, Field> = {
   countdownTargetDate: f('countdown_target_date'),
   countdownBgVideo: f('countdown_bg_video'),
   launchMessage: f('launch_message'),
+  // Bank account shown at checkout for transferência bancária. Empty until
+  // Polaris confirms the official details — never invented by the app.
+  bankName: f('bank_name'),
+  bankAccountHolder: f('bank_account_holder'),
+  bankAccountNumber: f('bank_account_number'),
+  bankInstructions: f('bank_instructions'),
+  // Pickup point shown when the customer chooses levantamento.
+  pickupLocation: f('pickup_location'),
 };
 
 const ABOUT_FIELDS: Record<string, Field> = {
